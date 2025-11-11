@@ -1,0 +1,94 @@
+# Clippy Configuration for Singularity Analysis Engine
+# This enforces strict code quality standards
+
+# Cognitive complexity threshold for functions
+cognitive-complexity-threshold = 15
+
+# Maximum number of lines for a single function
+too-many-lines-threshold = 100
+
+# Maximum number of single char names
+single-char-binding-names-threshold = 4
+
+# Enum variant size difference threshold (in bytes)
+enum-variant-size-threshold = 200
+
+# Type complexity threshold
+type-complexity-threshold = 250
+
+# Disallowed names
+disallowed-names = [
+    "foo",
+    "bar",
+    "baz",
+    "quux",
+    "tmp",
+    "temp",
+    "test",
+    "data",
+    "obj",
+    "object",
+    "val",
+    "value",
+    "var",
+    "variable"
+]
+
+# Minimum rust version
+msrv = "1.91.0"
+
+# Maximum allowed cyclomatic complexity
+cyclomatic-complexity-threshold = 10
+
+# Maximum trait bounds
+max-trait-bounds = 3
+
+# Maximum allowed size for arrays on stack
+array-size-threshold = 512000
+
+# Allow dbg! in tests
+allow-dbg-in-tests = true
+
+# Allow print statements in tests
+allow-print-in-tests = true
+
+# Allow unwrap in tests
+allow-unwrap-in-tests = true
+
+# Maximum struct fields
+max-struct-fields = 20
+
+# Maximum include depth for modules
+max-include-depth = 5
+
+# Allow certain attributes without reason
+allowed-duplicate-crates = []
+
+# Standard library includes threshold
+standard-macro-braces = [
+    { name = "format_args", brace = "{" },
+    { name = "format_args_nl", brace = "{" },
+    { name = "vec", brace = "[" },
+    { name = "matches", brace = "{" }
+]
+
+# Avoid breaking public API
+avoid-breaking-exported-api = true
+
+# Upper case acronyms configuration
+upper-case-acronyms-aggressive = true
+
+# Allow certain wildcard dependencies
+allow-wildcard-dependencies = false
+
+# Maximum function parameters
+max-fn-params-bools = 3
+
+# Warn on all caps names
+warn-on-all-wildcard-imports = true
+
+# Check private items documentation
+check-private-items = false
+
+# Enforced module level documentation
+missing-docs-in-crate-items = true
