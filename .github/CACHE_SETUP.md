@@ -4,6 +4,8 @@ This repository uses **three layers of caching** for optimal CI/CD performance:
 
 ## 🚀 Cache Layers Overview
 
+### For CI/CD (GitHub Actions)
+
 1. **GitHub Actions Cache** (Layer 1)
    - Free, built-in, 10GB limit
    - Stores: Nix store, Cargo artifacts
@@ -18,6 +20,26 @@ This repository uses **three layers of caching** for optimal CI/CD performance:
    - Community binary cache
    - 5GB free, unlimited for OSS
    - Shareable across projects
+
+4. **sccache** (Compilation Cache)
+   - 10GB compiler cache in CI
+   - Speeds up builds across multiple jobs
+   - **CI ONLY** - not for local development
+
+### For Local Development
+
+For local development, use:
+- **Cargo's incremental compilation** (automatic, fastest)
+- **Nix caches** (FlakeHub + Cachix for dependencies)
+- **NOT sccache** (slower locally than incremental)
+
+```bash
+# Local development (fast)
+cargo build  # Uses incremental compilation automatically
+
+# CI (uses sccache)
+RUSTC_WRAPPER=sccache cargo build  # Only in CI
+```
 
 ## Setup Instructions
 

@@ -13,10 +13,10 @@ env:
   RUST_BACKTRACE: 1
   RUSTFLAGS: -D warnings
   CARGO_TERM_COLOR: always
-  # Enable Rust compilation caching
+  # Enable incremental compilation for all jobs
   CARGO_INCREMENTAL: 1
-  RUSTC_WRAPPER: sccache
-  SCCACHE_GHA_ENABLED: "true"
+  # Note: sccache is configured per-job only in CI
+  # Locally, cargo's incremental compilation is faster
 
 jobs:
   test:
@@ -36,16 +36,21 @@ jobs:
           toolchain: ${{ matrix.rust }}
           components: rustfmt, clippy
 
-      # Use Rust cache action which combines cargo + sccache
-      - name: Setup Rust Cache (with sccache)
+      # Use Rust cache action for cargo caching
+      - name: Setup Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: true
           cache-on-failure: true
 
-      # Setup sccache for faster compilation
-      - name: Setup sccache
+      # Setup sccache only in CI (provides 10GB cache across jobs)
+      # Not recommended for local development - cargo incremental is faster locally
+      - name: Setup sccache (CI only)
         uses: mozilla-actions/sccache-action@v0.0.6
+        env:
+          # Enable sccache wrapper only in CI
+          RUSTC_WRAPPER: sccache
+          SCCACHE_GHA_ENABLED: "true"
 
       - name: Build
         run: cargo build --all-targets --all-features
