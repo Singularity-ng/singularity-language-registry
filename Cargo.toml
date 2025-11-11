@@ -1,0 +1,33 @@
+[package]
+name = "singularity-language-registry"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["Singularity Team"]
+description = "Centralized language registry for all Singularity analysis engines"
+repository = "https://github.com/singularity/singularity"
+readme = "README.md"
+keywords = ["language", "registry", "detection", "parsing", "analysis"]
+categories = ["development-tools"]
+
+[lib]
+name = "singularity_language_registry"
+path = "src/lib.rs"
+crate-type = ["rlib"]
+
+[dependencies]
+# Serialization (for language definitions)
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+
+# Standard library utilities
+lazy_static = { workspace = true }
+
+[features]
+default = []
+validate-metadata = []
+
+[build-dependencies]
