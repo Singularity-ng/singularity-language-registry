@@ -51,7 +51,7 @@ jobs:
       - name: Setup FlakeHub Cache
         uses: DeterminateSystems/flakehub-push@v4
         with:
-          name: "singularity-lang-reg"
+          name: "Singularity-ng/singularity-language-registry"
           visibility: "public"
         env:
           FLAKEHUB_PUSH_TOKEN: ${{ secrets.FLAKEHUB_PUSH_TOKEN }}
