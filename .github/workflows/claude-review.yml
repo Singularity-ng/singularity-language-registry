@@ -213,20 +213,17 @@ jobs:
         uses: actions/github-script@v7
         env:
           AUTO_APPROVE: ${{ steps.claude-analysis.outputs.AUTO_APPROVE }}
-          ORG_GITHUB_TOKEN: ${{ secrets.ORG_GITHUB_TOKEN }}
         with:
+          # Use organization PAT for approvals to bypass GitHub security restriction
+          # (GITHUB_TOKEN cannot approve PRs from the same workflow)
+          github-token: ${{ secrets.ORG_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
             const pr_number = context.payload.pull_request.number;
             const auto_approve = process.env.AUTO_APPROVE === 'true';
 
-            // Use organization PAT for approvals to bypass GitHub security restriction
-            // (GITHUB_TOKEN cannot approve PRs from the same workflow)
-            const token = process.env.ORG_GITHUB_TOKEN || process.env.GITHUB_TOKEN;
-            const { Octokit } = require('@octokit/rest');
-            const octokit = new Octokit({ auth: token });
-
             // Create the review with appropriate status
-            await octokit.rest.pulls.createReview({
+            // github object is pre-authenticated with the token above
+            await github.rest.pulls.createReview({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: pr_number,
