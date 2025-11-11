@@ -50,9 +50,9 @@ jobs:
         with:
           upstream-cache: "https://cache.nixos.org"
 
-      # Layer 3: FlakeHub binary cache
-      - name: Setup FlakeHub Cache
-        uses: DeterminateSystems/flakehub-cache-action@v7
+      # Layer 3: FlakeHub binary cache (disabled - action version unavailable)
+      # - name: Setup FlakeHub Cache
+      #   uses: DeterminateSystems/flakehub-cache-action@v1
 
       # Layer 4: Cachix binary cache (optional)
       - name: Setup Cachix Cache
