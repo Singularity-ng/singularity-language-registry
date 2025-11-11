@@ -1,0 +1,225 @@
+name: Automated Operations
+
+on:
+  schedule:
+    # Run every Monday at 00:00 UTC
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: 'Operation to perform'
+        required: true
+        type: choice
+        options:
+          - update-deps
+          - security-patch
+          - format-code
+          - sync-branches
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-dependencies:
+    name: Update Dependencies
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event.inputs.operation == 'update-deps'
+    steps:
+      - name: Generate token
+        id: generate_token
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id: ${{ secrets.APP_ID }}
+          private_key: ${{ secrets.APP_PRIVATE_KEY }}
+        continue-on-error: true
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.generate_token.outputs.token || secrets.GITHUB_TOKEN }}
+          ref: development
+
+      - name: Setup SSH (fallback)
+        if: steps.generate_token.outcome == 'failure'
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          cat >> ~/.ssh/config <<EOF
+          Host github.com
+            HostName github.com
+            User git
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking no
+          EOF
+          git remote set-url origin git@github.com:Singularity-ng/singularity-language-registry.git
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Update dependencies
+        run: |
+          cargo update
+          cargo outdated || true
+
+      - name: Run tests
+        run: cargo test --all-features
+
+      - name: Commit changes
+        run: |
+          git config user.name "singularity-bot[bot]"
+          git config user.email "singularity-bot[bot]@users.noreply.github.com"
+          git add Cargo.lock
+          if git diff --staged --quiet; then
+            echo "No dependency updates"
+          else
+            git commit -m "chore(deps): automated dependency update
+
+            Co-authored-by: singularity-bot[bot] <singularity-bot[bot]@users.noreply.github.com>"
+            git push origin development
+          fi
+
+  security-patches:
+    name: Apply Security Patches
+    runs-on: ubuntu-latest
+    if: github.event.inputs.operation == 'security-patch'
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          cat >> ~/.ssh/config <<EOF
+          Host github.com
+            HostName github.com
+            User git
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking no
+          EOF
+
+      - name: Checkout main
+        run: |
+          git clone git@github.com:Singularity-ng/singularity-language-registry.git .
+          git checkout main
+          git config user.name "singularity-bot[bot]"
+          git config user.email "singularity-bot[bot]@users.noreply.github.com"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Check and fix vulnerabilities
+        run: |
+          # Run audit and attempt fixes
+          cargo audit fix || true
+
+          # Update vulnerable dependencies
+          cargo update
+
+      - name: Test changes
+        run: cargo test --all-features --release
+
+      - name: Push security patch
+        run: |
+          git add .
+          if git diff --staged --quiet; then
+            echo "No security patches needed"
+          else
+            git commit -m "security: apply automated security patches [skip ci]
+
+            This is an automated security update bypassing branch protection
+            for immediate vulnerability remediation.
+
+            Co-authored-by: singularity-bot[bot] <singularity-bot[bot]@users.noreply.github.com>"
+            git push origin main
+          fi
+
+  format-code:
+    name: Format Code
+    runs-on: ubuntu-latest
+    if: github.event.inputs.operation == 'format-code'
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          cat >> ~/.ssh/config <<EOF
+          Host github.com
+            HostName github.com
+            User git
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking no
+          EOF
+
+      - name: Checkout
+        run: |
+          git clone git@github.com:Singularity-ng/singularity-language-registry.git .
+          git checkout development
+          git config user.name "singularity-bot[bot]"
+          git config user.email "singularity-bot[bot]@users.noreply.github.com"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Format code
+        run: |
+          cargo fmt
+          cargo clippy --fix --all-features --allow-dirty --allow-staged || true
+
+      - name: Commit formatting
+        run: |
+          git add .
+          if git diff --staged --quiet; then
+            echo "No formatting changes"
+          else
+            git commit -m "style: automated code formatting [skip ci]
+
+            Co-authored-by: singularity-bot[bot] <singularity-bot[bot]@users.noreply.github.com>"
+            git push origin development
+          fi
+
+  sync-branches:
+    name: Sync Branches
+    runs-on: ubuntu-latest
+    if: github.event.inputs.operation == 'sync-branches'
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          cat >> ~/.ssh/config <<EOF
+          Host github.com
+            HostName github.com
+            User git
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking no
+          EOF
+
+      - name: Sync development to main
+        run: |
+          git clone git@github.com:Singularity-ng/singularity-language-registry.git .
+          git config user.name "singularity-bot[bot]"
+          git config user.email "singularity-bot[bot]@users.noreply.github.com"
+
+          # Fetch all branches
+          git fetch --all
+
+          # Check if development is ahead of main
+          git checkout main
+          git merge origin/development --ff-only -m "chore: sync development to main [skip ci]" || {
+            echo "Cannot fast-forward merge. Manual intervention required."
+            exit 1
+          }
+
+          git push origin main

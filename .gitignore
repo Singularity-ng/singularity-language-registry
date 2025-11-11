@@ -33,3 +33,18 @@ coverage/
 
 # Generated report (can be regenerated)
 LANGUAGES.md
+
+# Nix
+result
+result-*
+.direnv/
+.devenv/
+
+# Nix build artifacts
+*.nar
+*.nar.xz
+
+# Local secrets - NEVER COMMIT
+.envrc.local
+.env.local
+.secrets

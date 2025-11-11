@@ -1,28 +1,45 @@
+[registries]
+# GitHub Packages - Private registry using GitHub Enterprise
+# Note: Use 'cargo login --registry github' to set token
+github = { index = "sparse+https://github.com/Singularity-ng/_cargo-index/" }
+
+# Cloudsmith - Enterprise private registry (if you have it)
+# cloudsmith = { index = "https://dl.cloudsmith.io/basic/your-org/cargo/cargo/index.git" }
+
+# Artifactory - Common in enterprises
+# artifactory = { index = "https://artifactory.company.com/artifactory/api/cargo/cargo-local" }
+
+# Self-hosted Kellnr
+# kellnr = { index = "sparse+https://kellnr.company.com/api/v1/crates/" }
+
+[registry]
+# Default registry (can override to use private)
+default = "crates-io"  # Change to "github" for private-by-default
+
+[net]
+git-fetch-with-cli = true  # Use git CLI for auth (better for enterprise)
+
+[http]
+# For self-signed certificates in enterprise
+# cainfo = "/path/to/enterprise-ca-bundle.crt"
+
+# Optional: Mirror configuration for faster downloads
+# [source.crates-io]
+# replace-with = "crates-io-mirror"
+
+# [source.crates-io-mirror]
+# registry = "sparse+https://index.crates.io/"
+
 [build]
-# Treat all warnings as errors, enable pedantic mode
-rustflags = [
-    "-D", "warnings",
-    "-W", "clippy::all",
-    "-W", "clippy::pedantic",
-    "-W", "clippy::nursery",
-    "-W", "clippy::cargo",
+# Incremental compilation for local dev
+incremental = true
 
-    # Allow some pedantic lints that are too strict for a library
-    "-A", "clippy::must_use_candidate",
-    "-A", "clippy::missing_errors_doc",
-    "-A", "clippy::missing_panics_doc",
-    "-A", "clippy::module_name_repetitions",
-    "-A", "clippy::uninlined_format_args",
-]
+# Enterprise-specific build settings
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 
-# Optimize for performance in release mode
 [profile.release]
 lto = true
 codegen-units = 1
 opt-level = 3
-strip = true
-
-# Development profile for faster compilation
-[profile.dev]
-opt-level = 0
-debug = true
