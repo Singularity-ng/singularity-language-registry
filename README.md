@@ -1,6 +1,11 @@
 # Singularity Language Registry
 
+[![Documentation](https://img.shields.io/badge/docs-rustdoc-blue.svg)](https://singularity-ng.github.io/singularity-language-registry/)
+[![CI](https://github.com/singularity-ng/singularity-language-registry/workflows/CI/badge.svg)](https://github.com/singularity-ng/singularity-language-registry/actions)
+
 Centralized language registry for all Singularity analysis engines.
+
+**[📚 View Documentation](https://singularity-ng.github.io/singularity-language-registry/)** | **[📖 Setup Guide](./DOCS_SETUP.md)**
 
 ## Purpose
 
@@ -176,3 +181,48 @@ if supports_feature("rust", AnalysisFeature::RCA) {
 ## Zero Dependencies
 
 This crate has no dependencies on other Singularity crates, making it safe for all engines to import without circular dependencies.
+
+## Development
+
+### Documentation
+
+Generate and view documentation locally:
+
+```bash
+# Using Nix (recommended)
+nix run .#docs
+
+# Using cargo
+cargo doc --all-features --open
+
+# Build documentation package with Nix
+nix build .#docs
+```
+
+The documentation is automatically published to GitHub Pages when changes are pushed to `main`. See [DOCS_SETUP.md](./DOCS_SETUP.md) for complete documentation setup and deployment instructions.
+
+### Testing
+
+```bash
+# Run all tests
+cargo test --all-features
+
+# Run with Nix
+nix flake check
+```
+
+### Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for development guidelines and contribution process.
+
+## License
+
+**Proprietary Software - All Rights Reserved**
+
+Copyright (c) 2025 Singularity Team. All rights reserved.
+
+This software is proprietary and confidential. Unauthorized copying, distribution, modification, or use of this software, via any medium, is strictly prohibited without explicit written permission from Singularity Team.
+
+See [LICENSE](./LICENSE) for complete terms and conditions.
+
+For licensing inquiries, please contact the Singularity Team.

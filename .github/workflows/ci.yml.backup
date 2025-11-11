@@ -1,0 +1,264 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, development ]
+  pull_request:
+    branches: [ main, development ]
+  schedule:
+    # Run at 00:00 UTC every Sunday to catch dependency issues
+    - cron: '0 0 * * 0'
+
+env:
+  RUST_BACKTRACE: 1
+  RUSTFLAGS: -D warnings
+  CARGO_TERM_COLOR: always
+  # Enable incremental compilation for all jobs
+  CARGO_INCREMENTAL: 1
+  # Note: sccache is configured per-job only in CI
+  # Locally, cargo's incremental compilation is faster
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust: [stable, beta, nightly]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: rustfmt, clippy
+
+      # Use Rust cache action for cargo caching
+      - name: Setup Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: true
+          cache-on-failure: true
+
+      # Setup sccache only in CI (provides 10GB cache across jobs)
+      # Not recommended for local development - cargo incremental is faster locally
+      - name: Setup sccache (CI only)
+        uses: mozilla-actions/sccache-action@v0.0.6
+        env:
+          # Enable sccache wrapper only in CI
+          RUSTC_WRAPPER: sccache
+          SCCACHE_GHA_ENABLED: "true"
+
+      - name: Build
+        run: cargo build --all-targets --all-features
+
+      - name: Run tests
+        run: cargo test --all-features --verbose
+
+      - name: Run tests (release mode)
+        run: cargo test --release --all-features --verbose
+
+      - name: Run examples
+        run: cargo run --example usage
+
+      - name: Check documentation
+        run: cargo doc --all-features --no-deps
+
+  clippy:
+    name: Clippy (Pedantic)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Run clippy with pedantic mode
+        run: cargo clippy --all-targets --all-features -- -D warnings -W clippy::pedantic -W clippy::nursery
+
+  format:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+  audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Run security audit
+        run: cargo audit
+
+  outdated:
+    name: Check Outdated Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-outdated
+        run: cargo install cargo-outdated
+
+      - name: Check for outdated dependencies
+        run: cargo outdated --exit-code 1 || true
+
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install tarpaulin
+        run: cargo install cargo-tarpaulin
+
+      - name: Generate coverage
+        run: cargo tarpaulin --out xml --all-features --verbose
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./cobertura.xml
+          fail_ci_if_error: false
+        continue-on-error: true
+
+  msrv:
+    name: Minimum Supported Rust Version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MSRV (1.91.0)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.91.0
+
+      - name: Check MSRV
+        run: |
+          cargo build --all-features
+          cargo test --all-features
+
+  metadata:
+    name: Validate Metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Validate language registry metadata
+        run: |
+          cargo build --release
+          cargo run --example usage
+
+  benchmarks:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-criterion
+        run: cargo install cargo-criterion || true
+        continue-on-error: true
+
+      - name: Run benchmarks
+        run: cargo bench --no-fail-fast || true
+        continue-on-error: true
+
+  # Nix build with FlakeHub + Cachix + GitHub caching (all three layers)
+  nix-build:
+    name: Nix Build (Multi-Cache)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      # Layer 1: GitHub Actions cache for Nix store
+      - name: Cache Nix Store
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nix-profile
+            ~/.nix-defexpr
+            ~/.nix-channels
+            /nix/store
+            /nix/var/nix
+          key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-keys: |
+            nix-${{ runner.os }}-
+
+      # Install Nix package manager
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v12
+
+      # Layer 2: Magic Nix Cache (GitHub Actions backend)
+      - name: Setup Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v8
+        with:
+          upstream-cache: "https://cache.nixos.org"
+
+      # Layer 3: FlakeHub binary cache
+      - name: Setup FlakeHub Cache
+        uses: DeterminateSystems/flakehub-cache-action@v7
+        with:
+          cache-name: "singularity-lang-reg"
+          visibility: "public"
+        env:
+          FLAKEHUB_PUSH_TOKEN: ${{ secrets.FLAKEHUB_PUSH_TOKEN }}
+
+      # Layer 4: Cachix binary cache (optional - requires secret)
+      - name: Setup Cachix Cache
+        if: env.CACHIX_AUTH_TOKEN != ''
+        uses: cachix/cachix-action@v15
+        with:
+          name: singularity-language-registry
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        env:
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      # Build with Nix using all cache layers
+      - name: Nix Build
+        run: |
+          # Run all flake checks (formatting, tests, clippy, etc.)
+          nix flake check -L
+
+          # Build the package
+          nix build -L
+
+      # Push to Cachix if on main branch
+      - name: Push to Cachix
+        if: success() && github.ref == 'refs/heads/main' && env.CACHIX_AUTH_TOKEN != ''
+        run: |
+          nix build --json | jq -r '.[].outputs | to_entries[].value' | cachix push singularity-language-registry
+        env:
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}

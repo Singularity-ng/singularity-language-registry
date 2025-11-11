@@ -1,0 +1,58 @@
+# Local development environment configuration
+# Copy this file to .envrc.local and customize for your setup
+# This file is gitignored and should NEVER be committed
+
+# ============================================================================
+# Binary Cache Authentication Tokens
+# ============================================================================
+
+# Cachix authentication token
+# Get your token from https://app.cachix.org/personal-auth-tokens
+export CACHIX_AUTH_TOKEN="<CACHIX_TOKEN>"
+
+# FlakeHub authentication token
+# Get your token from https://flakehub.com/settings/tokens
+export FLAKEHUB_PUSH_TOKEN="<FLAKEHUB_TOKEN>"
+
+# Example token formats (DO NOT COMMIT):
+# export CACHIX_AUTH_TOKEN="eyJhbGciOiJIUzI1NiJ9..."
+# export FLAKEHUB_PUSH_TOKEN="019a70a3-93a6-7f78-a389-45cf47e3bf30"
+
+# ============================================================================
+# Development Environment Customization
+# ============================================================================
+
+# Override default log level (default: debug)
+# export RUST_LOG=trace
+# export RUST_LOG=info
+
+# Disable backtrace for cleaner output (default: 1)
+# export RUST_BACKTRACE=0
+# export RUST_BACKTRACE=full
+
+# Override build parallelism (auto-detected by default)
+# export CARGO_BUILD_JOBS=8
+
+# Disable incremental compilation (useful for profiling)
+# export CARGO_INCREMENTAL=0
+
+# Enable sccache for local development (not recommended - cargo incremental is faster)
+# export RUSTC_WRAPPER=sccache
+# export SCCACHE_DIR=$HOME/.cache/sccache
+
+# ============================================================================
+# Project-Specific Settings
+# ============================================================================
+
+# Example: Enable extra validation features
+# export RUSTFLAGS="-D warnings -W clippy::pedantic"
+
+# Example: Custom documentation settings
+# export RUSTDOCFLAGS="--cfg docsrs -D warnings"
+
+# ============================================================================
+# Git Configuration (for CI workflows)
+# ============================================================================
+
+# GitHub CLI token (for gh commands)
+# export GITHUB_TOKEN="ghp_your_token_here"

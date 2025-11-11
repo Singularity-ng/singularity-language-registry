@@ -9,6 +9,7 @@ use std::path::Path;
 ///
 /// Returns None if the content doesn't match any supported language.
 /// No fallback - explicit detection only.
+#[must_use]
 pub fn detect_from_content(content: &str) -> Option<&'static LanguageInfo> {
     // Check shebang first
     if let Some(lang) = detect_from_shebang(content) {
@@ -65,7 +66,8 @@ pub fn detect_from_patterns(content: &str) -> Option<&'static LanguageInfo> {
     // SQL
     if content.to_uppercase().starts_with("CREATE TABLE")
         || content.to_uppercase().starts_with("SELECT ")
-        || content.to_uppercase().starts_with("INSERT INTO") {
+        || content.to_uppercase().starts_with("INSERT INTO")
+    {
         return LANGUAGE_REGISTRY.get_language("sql");
     }
 

@@ -52,6 +52,10 @@ outdated:
 audit:
     cargo audit
 
+# Validate Renovate configuration
+renovate-validate:
+    nix develop --command renovate-config-validator renovate.json5
+
 # Build documentation
 doc:
     cargo doc --all-features --no-deps --open
@@ -115,7 +119,7 @@ changelog:
     git log --pretty=format:"- %s (%h)" --reverse > CHANGELOG.md
 
 # Verify everything before PR
-verify: fmt clippy test audit doc
+verify: fmt clippy test audit renovate-validate doc
     @echo "✅ All checks passed!"
 
 # Nix-specific commands
@@ -145,3 +149,61 @@ update-input input:
 # Build and push to cachix (requires cachix setup)
 cache:
     nix build --json | jq -r '.[].outputs | to_entries[].value' | cachix push singularity-language-registry || true
+
+# Generate release reports locally (simulates CI release reports)
+release-reports:
+    #!/usr/bin/env bash
+    set -e
+    echo "Generating release reports..."
+    mkdir -p release-reports
+
+    # Clippy report (0 warnings tolerance)
+    echo "# Clippy Report - Zero Warnings Tolerance" > release-reports/clippy-report.md
+    echo "" >> release-reports/clippy-report.md
+    echo "**Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> release-reports/clippy-report.md
+    echo "## Configuration" >> release-reports/clippy-report.md
+    echo "- \`-D warnings\` - \`-W clippy::pedantic\` - \`-W clippy::nursery\`" >> release-reports/clippy-report.md
+    echo "\`\`\`" >> release-reports/clippy-report.md
+    cargo clippy --all-targets --all-features -- -D warnings -W clippy::pedantic -W clippy::nursery 2>&1 | tee -a release-reports/clippy-report.md
+    echo "\`\`\`" >> release-reports/clippy-report.md
+
+    # Security audit
+    echo "# Security Audit Report" > release-reports/security-audit.md
+    echo "" >> release-reports/security-audit.md
+    echo "**Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> release-reports/security-audit.md
+    echo "## Cargo Audit" >> release-reports/security-audit.md
+    echo "\`\`\`" >> release-reports/security-audit.md
+    cargo audit 2>&1 | tee -a release-reports/security-audit.md || true
+    echo "\`\`\`" >> release-reports/security-audit.md
+    echo "## Cargo Deny" >> release-reports/security-audit.md
+    echo "\`\`\`" >> release-reports/security-audit.md
+    cargo deny check 2>&1 | tee -a release-reports/security-audit.md || true
+    echo "\`\`\`" >> release-reports/security-audit.md
+
+    # SBOM
+    echo "# Software Bill of Materials" > release-reports/sbom.md
+    echo "" >> release-reports/sbom.md
+    echo "**Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> release-reports/sbom.md
+    echo "## Direct Dependencies" >> release-reports/sbom.md
+    echo "\`\`\`toml" >> release-reports/sbom.md
+    grep -A 100 '^\[dependencies\]' Cargo.toml | grep -B 100 '^\[' | head -n -1 >> release-reports/sbom.md
+    echo "\`\`\`" >> release-reports/sbom.md
+    echo "## Full Dependency Tree" >> release-reports/sbom.md
+    echo "\`\`\`" >> release-reports/sbom.md
+    cargo tree --all-features >> release-reports/sbom.md
+    echo "\`\`\`" >> release-reports/sbom.md
+
+    # Coverage
+    echo "# Test Coverage Report" > release-reports/coverage-report.md
+    echo "" >> release-reports/coverage-report.md
+    echo "**Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> release-reports/coverage-report.md
+    echo "\`\`\`" >> release-reports/coverage-report.md
+    cargo tarpaulin --all-features --out Stdout 2>&1 | tee -a release-reports/coverage-report.md || true
+    echo "\`\`\`" >> release-reports/coverage-report.md
+
+    echo ""
+    echo "✅ Reports generated in ./release-reports/"
+    echo "   - clippy-report.md"
+    echo "   - security-audit.md"
+    echo "   - sbom.md"
+    echo "   - coverage-report.md"

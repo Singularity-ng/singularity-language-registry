@@ -4,202 +4,22 @@ on:
   push:
     branches: [ main, development ]
   pull_request:
-    branches: [ main, development ]
+    branches: [ main ]  # Only PRs to main need full CI
   schedule:
     # Run at 00:00 UTC every Sunday to catch dependency issues
     - cron: '0 0 * * 0'
 
-env:
-  RUST_BACKTRACE: 1
-  RUSTFLAGS: -D warnings
-  CARGO_TERM_COLOR: always
-  # Enable incremental compilation for all jobs
-  CARGO_INCREMENTAL: 1
-  # Note: sccache is configured per-job only in CI
-  # Locally, cargo's incremental compilation is faster
+# Cancel in-progress runs on the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
-    name: Test Suite
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        rust: [stable, beta, nightly]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.rust }}
-          components: rustfmt, clippy
-
-      # Use Rust cache action for cargo caching
-      - name: Setup Rust Cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: true
-          cache-on-failure: true
-
-      # Setup sccache only in CI (provides 10GB cache across jobs)
-      # Not recommended for local development - cargo incremental is faster locally
-      - name: Setup sccache (CI only)
-        uses: mozilla-actions/sccache-action@v0.0.6
-        env:
-          # Enable sccache wrapper only in CI
-          RUSTC_WRAPPER: sccache
-          SCCACHE_GHA_ENABLED: "true"
-
-      - name: Build
-        run: cargo build --all-targets --all-features
-
-      - name: Run tests
-        run: cargo test --all-features --verbose
-
-      - name: Run tests (release mode)
-        run: cargo test --release --all-features --verbose
-
-      - name: Run examples
-        run: cargo run --example usage
-
-      - name: Check documentation
-        run: cargo doc --all-features --no-deps
-
-  clippy:
-    name: Clippy (Pedantic)
+  # Primary CI - Nix flake checks (build, test, clippy, fmt, audit, doc)
+  # Ubuntu only - no macOS builds needed
+  nix-check:
+    name: Nix Checks
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install stable Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-
-      - name: Run clippy with pedantic mode
-        run: cargo clippy --all-targets --all-features -- -D warnings -W clippy::pedantic -W clippy::nursery
-
-  format:
-    name: Format Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install stable Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-
-      - name: Check formatting
-        run: cargo fmt -- --check
-
-  audit:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install cargo-audit
-        run: cargo install cargo-audit
-
-      - name: Run security audit
-        run: cargo audit
-
-  outdated:
-    name: Check Outdated Dependencies
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install stable Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-outdated
-        run: cargo install cargo-outdated
-
-      - name: Check for outdated dependencies
-        run: cargo outdated --exit-code 1 || true
-
-  coverage:
-    name: Code Coverage
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install stable Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install tarpaulin
-        run: cargo install cargo-tarpaulin
-
-      - name: Generate coverage
-        run: cargo tarpaulin --out xml --all-features --verbose
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./cobertura.xml
-          fail_ci_if_error: false
-        continue-on-error: true
-
-  msrv:
-    name: Minimum Supported Rust Version
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install MSRV (1.91.0)
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: 1.91.0
-
-      - name: Check MSRV
-        run: |
-          cargo build --all-features
-          cargo test --all-features
-
-  metadata:
-    name: Validate Metadata
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install stable Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Validate language registry metadata
-        run: |
-          cargo build --release
-          cargo run --example usage
-
-  benchmarks:
-    name: Benchmarks
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install stable Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-criterion
-        run: cargo install cargo-criterion || true
-        continue-on-error: true
-
-      - name: Run benchmarks
-        run: cargo bench --no-fail-fast || true
-        continue-on-error: true
-
-  # Nix build with FlakeHub + Cachix + GitHub caching (all three layers)
-  nix-build:
-    name: Nix Build (Multi-Cache)
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -236,7 +56,7 @@ jobs:
         env:
           FLAKEHUB_PUSH_TOKEN: ${{ secrets.FLAKEHUB_PUSH_TOKEN }}
 
-      # Layer 4: Cachix binary cache (optional - requires secret)
+      # Layer 4: Cachix binary cache (optional)
       - name: Setup Cachix Cache
         if: env.CACHIX_AUTH_TOKEN != ''
         uses: cachix/cachix-action@v15
@@ -246,13 +66,16 @@ jobs:
         env:
           CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      # Build with Nix using all cache layers
-      - name: Nix Build
+      # Run all checks: build, test, clippy, fmt, audit, doc
+      - name: Run Nix Flake Checks
         run: |
-          # Run all flake checks (formatting, tests, clippy, etc.)
-          nix flake check -L
+          echo "Running all Nix flake checks (build, test, clippy, fmt, audit, doc)..."
+          nix flake check -L --show-trace
 
-          # Build the package
+      # Build the package
+      - name: Build Package
+        run: |
+          echo "Building package..."
           nix build -L
 
       # Push to Cachix if on main branch
@@ -262,3 +85,105 @@ jobs:
           nix build --json | jq -r '.[].outputs | to_entries[].value' | cachix push singularity-language-registry
         env:
           CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+  # Code coverage (runs separately since tarpaulin is slow)
+  # Make optional for PRs - only required on main
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v12
+
+      - name: Setup Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v8
+
+      - name: Generate Coverage
+        run: |
+          nix develop --command cargo tarpaulin --out xml --all-features --verbose
+
+      - name: Upload Coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./cobertura.xml
+          fail_ci_if_error: false
+        continue-on-error: true
+
+  # MSRV check (use specific Rust version, can't do this easily in Nix)
+  # Only run on main branch pushes and scheduled runs, not every PR
+  msrv:
+    name: MSRV (1.91.0)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MSRV
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.91.0
+
+      - name: Setup Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check MSRV
+        run: |
+          cargo build --all-features
+          cargo test --all-features
+
+  # Dependency audit (informational - runs on schedule)
+  audit-deps:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v12
+
+      - name: Check Outdated Dependencies
+        run: |
+          nix develop --command cargo outdated --exit-code 1
+        continue-on-error: true
+
+  # Benchmarks (runs only on main branch)
+  benchmarks:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v12
+
+      - name: Setup Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v8
+
+      - name: Run Benchmarks
+        run: |
+          nix develop --command cargo bench --no-fail-fast
+        continue-on-error: true
+
+  # Summary job - requires all critical checks to pass
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [nix-check, msrv]
+    if: always()
+    steps:
+      - name: Check All Jobs
+        run: |
+          if [[ "${{ needs.nix-check.result }}" != "success" ]]; then
+            echo "❌ Nix checks failed"
+            exit 1
+          fi
+          if [[ "${{ needs.msrv.result }}" != "success" ]]; then
+            echo "❌ MSRV check failed"
+            exit 1
+          fi
+          echo "✅ All critical checks passed!"

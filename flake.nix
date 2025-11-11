@@ -7,7 +7,6 @@
     flake-utils.url = "github:numtide/flake-utils";
     crane = {
       url = "github:ipetkov/crane";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
@@ -78,6 +77,13 @@
               WorkingDir = "/";
             };
           };
+
+          # Documentation package
+          docs = craneLib.cargoDoc (commonArgs // {
+            inherit cargoArtifacts;
+            cargoDocExtraArgs = "--all-features --no-deps --document-private-items";
+            RUSTDOCFLAGS = "--cfg docsrs -D warnings";
+          });
         };
 
         # Development shell
@@ -85,51 +91,49 @@
           inputsFrom = [ commonArgs ];
 
           nativeBuildInputs = with pkgs; [
-            rustToolchain
-            rust-analyzer
-            cargo-edit
-            cargo-watch
-            cargo-audit
-            cargo-outdated
-            cargo-tarpaulin
-            cargo-nextest
-            cargo-machete
-            cargo-deny
-            cargo-expand
-            cargo-criterion
+            # Core Rust toolchain (always needed)
+            rustToolchain      # cargo, rustc, rustfmt, clippy, rust-analyzer
+            rust-analyzer      # IDE support
+
+            # Essential cargo tools (daily use)
+            cargo-edit         # cargo add/rm/upgrade commands
+            cargo-watch        # Auto-run on file changes
+            cargo-nextest      # Faster test runner
+            cargo-expand       # Macro debugging
+
+            # Quality & security (frequent use)
+            cargo-audit        # Security vulnerability checking
+            cargo-outdated     # Dependency updates
+            cargo-machete      # Unused dependency detection
+            cargo-deny         # License and security policy
+
+            # Performance tools (occasional use)
+            cargo-tarpaulin    # Code coverage
+            cargo-criterion    # Benchmarking
 
             # Development tools
-            git
-            gh
-            just
-            watchexec
-            hyperfine
-            tokei
-
-            # Code quality tools
-            typos
-            taplo
-            yamlfmt
+            git                # Version control
+            gh                 # GitHub CLI
+            just               # Task runner
           ];
 
           shellHook = ''
             echo "🦀 Singularity Language Registry Development Shell"
             echo ""
-            echo "Available commands:"
-            echo "  cargo build          - Build the project"
-            echo "  cargo test           - Run tests"
-            echo "  cargo clippy         - Run clippy lints"
-            echo "  cargo fmt            - Format code"
-            echo "  cargo audit          - Check for vulnerabilities"
-            echo "  cargo outdated       - Check for outdated dependencies"
-            echo "  cargo tarpaulin      - Generate code coverage"
-            echo "  cargo nextest run    - Run tests with nextest"
-            echo "  cargo watch -x test  - Watch and test"
+            echo "Quick commands:"
+            echo "  just           - Show all available tasks"
+            echo "  just verify    - Run all checks (fmt, clippy, test, audit)"
+            echo "  just watch     - Auto-run tests on file changes"
+            echo ""
+            echo "Cargo commands:"
+            echo "  cargo nextest run    - Fast test runner"
+            echo "  cargo add <crate>    - Add dependency"
+            echo "  cargo audit          - Security check"
+            echo "  cargo expand         - Debug macros"
             echo ""
             echo "Nix commands:"
+            echo "  nix flake check      - Run all CI checks locally"
             echo "  nix build            - Build the package"
-            echo "  nix flake check      - Run all checks"
-            echo "  nix develop          - Enter dev shell"
             echo ""
 
             # Setup git hooks if they exist
@@ -179,17 +183,30 @@
         };
 
         # Apps that can be run
-        apps.default = flake-utils.lib.mkApp {
-          drv = singularity-language-registry;
+        apps = {
+          default = flake-utils.lib.mkApp {
+            drv = singularity-language-registry;
+          };
+
+          # Open documentation in browser
+          docs = {
+            type = "app";
+            program = toString (pkgs.writeShellScript "open-docs" ''
+              set -e
+              echo "Building documentation..."
+              ${rustToolchain}/bin/cargo doc --all-features --no-deps --document-private-items --open
+            '');
+          };
         };
 
         # Formatter for nix files
         formatter = pkgs.nixpkgs-fmt;
 
-        # Legacy support
-        defaultPackage = packages.default;
-        defaultApp = apps.default;
-        devShell = devShells.default;
+        # Legacy support (deprecated but kept for backwards compatibility)
+        defaultPackage = singularity-language-registry;
+        defaultApp = flake-utils.lib.mkApp {
+          drv = singularity-language-registry;
+        };
       }
     );
 }

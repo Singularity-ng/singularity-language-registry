@@ -504,18 +504,22 @@ impl LanguageRegistry {
         let extension = file_path
             .extension()
             .and_then(|ext| ext.to_str())
-            .ok_or_else(|| anyhow::anyhow!("Cannot detect language: no file extension for {}", file_path.display()))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Cannot detect language: no file extension for {}",
+                    file_path.display()
+                )
+            })?;
 
         // Fail if extension not supported
-        let language_id = self
-            .extension_map
-            .get(extension)
-            .ok_or_else(|| anyhow::anyhow!("Language not supported: unknown extension '.{extension}'"))?;
+        let language_id = self.extension_map.get(extension).ok_or_else(|| {
+            anyhow::anyhow!("Language not supported: unknown extension '.{extension}'")
+        })?;
 
         // Get language (internal consistency check)
-        self.languages
-            .get(language_id)
-            .ok_or_else(|| anyhow::anyhow!("Internal error: language '{language_id}' missing from registry"))
+        self.languages.get(language_id).ok_or_else(|| {
+            anyhow::anyhow!("Internal error: language '{language_id}' missing from registry")
+        })
     }
 
     /// Get language by ID

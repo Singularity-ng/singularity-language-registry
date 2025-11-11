@@ -3,20 +3,10 @@
 //! Run with: `cargo run --example usage`
 
 use singularity_language_registry::{
-    detect_language,
-    get_language,
-    get_language_by_alias,
-    supported_languages,
-    rca_supported_languages,
-    ast_grep_supported_languages,
-    detect_from_content,
-    is_detectable,
-    languages_by_families,
+    ast_grep_supported_languages, detect_from_content, detect_language, get_language,
+    get_language_by_alias, is_detectable, languages_by_families, rca_supported_languages,
+    recommended_linters, same_family, supported_languages, supports_feature, AnalysisFeature,
     LanguageStats,
-    same_family,
-    recommended_linters,
-    supports_feature,
-    AnalysisFeature,
 };
 use std::path::Path;
 
@@ -83,12 +73,21 @@ fn main() {
     println!("\n7. Detection Confidence:");
     let test_path = Path::new("main.rs");
     let detectable = is_detectable(test_path, None);
-    println!("  main.rs detectable: {}", if detectable { "Yes" } else { "No" });
+    println!(
+        "  main.rs detectable: {}",
+        if detectable { "Yes" } else { "No" }
+    );
 
     // 8. Same family check
     println!("\n8. Same Family Check:");
-    println!("  Elixir & Erlang same family? {}", same_family("elixir", "erlang"));
-    println!("  Rust & Python same family? {}", same_family("rust", "python"));
+    println!(
+        "  Elixir & Erlang same family? {}",
+        same_family("elixir", "erlang")
+    );
+    println!(
+        "  Rust & Python same family? {}",
+        same_family("rust", "python")
+    );
 
     // 9. Recommended linters
     println!("\n9. Recommended Linters:");

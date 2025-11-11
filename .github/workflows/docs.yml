@@ -1,0 +1,106 @@
+name: Documentation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'Cargo.toml'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+# Ensure only one deployment runs at a time
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rust-docs
+
+      - name: Setup Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: true
+
+      - name: Build documentation
+        env:
+          RUSTDOCFLAGS: >-
+            --cfg docsrs
+            -D warnings
+            --enable-index-page
+            -Z unstable-options
+            --extern-html-root-url serde=https://docs.rs/serde/latest/
+            --extern-html-root-url serde_json=https://docs.rs/serde_json/latest/
+        run: |
+          cargo +nightly doc \
+            --all-features \
+            --no-deps \
+            --document-private-items \
+            --lib
+
+      - name: Add redirect index.html
+        run: |
+          cat > target/doc/index.html <<EOF
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <meta http-equiv="refresh" content="0; url=singularity_language_registry/index.html">
+            <title>Redirecting to singularity_language_registry documentation</title>
+          </head>
+          <body>
+            <p>Redirecting to <a href="singularity_language_registry/index.html">singularity_language_registry documentation</a>...</p>
+          </body>
+          </html>
+          EOF
+
+      - name: Add .nojekyll file
+        run: touch target/doc/.nojekyll
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: target/doc
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Add deployment summary
+        run: |
+          echo "## Documentation Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Documentation has been successfully deployed to GitHub Pages." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**URL**: ${{ steps.deployment.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View the documentation: [singularity_language_registry docs](${{ steps.deployment.outputs.page_url }}singularity_language_registry/)" >> $GITHUB_STEP_SUMMARY

@@ -107,9 +107,21 @@ pub fn generate_metadata_report() -> String {
     report.push_str("## Statistics\n");
     let _ = writeln!(&mut report, "- Total Languages: {}", stats.total_languages);
     let _ = writeln!(&mut report, "- RCA Supported: {}", stats.rca_supported);
-    let _ = writeln!(&mut report, "- AST-Grep Supported: {}", stats.ast_grep_supported);
-    let _ = writeln!(&mut report, "- Compiled Languages: {}", stats.compiled_languages);
-    let _ = writeln!(&mut report, "- Interpreted Languages: {}\n", stats.interpreted_languages);
+    let _ = writeln!(
+        &mut report,
+        "- AST-Grep Supported: {}",
+        stats.ast_grep_supported
+    );
+    let _ = writeln!(
+        &mut report,
+        "- Compiled Languages: {}",
+        stats.compiled_languages
+    );
+    let _ = writeln!(
+        &mut report,
+        "- Interpreted Languages: {}\n",
+        stats.interpreted_languages
+    );
 
     report.push_str("## Language Support Matrix\n\n");
     report.push_str("| Language | Extensions | RCA | AST-Grep | Tree-Sitter | Family |\n");
@@ -122,8 +134,16 @@ pub fn generate_metadata_report() -> String {
             lang.name,
             lang.extensions.join(", "),
             if lang.rca_supported { "✓" } else { "✗" },
-            if lang.ast_grep_supported { "✓" } else { "✗" },
-            if lang.tree_sitter_language.is_some() { "✓" } else { "✗" },
+            if lang.ast_grep_supported {
+                "✓"
+            } else {
+                "✗"
+            },
+            if lang.tree_sitter_language.is_some() {
+                "✓"
+            } else {
+                "✗"
+            },
             lang.family.as_deref().unwrap_or("-"),
         );
     }
@@ -177,7 +197,8 @@ pub fn get_known_support() -> MetadataSource {
         ],
 
         // Tree-sitter has parsers for all our languages
-        tree_sitter_languages: LANGUAGE_REGISTRY.supported_languages()
+        tree_sitter_languages: LANGUAGE_REGISTRY
+            .supported_languages()
             .iter()
             .filter_map(|l| l.tree_sitter_language.clone())
             .collect(),
@@ -199,10 +220,7 @@ mod tests {
             for mismatch in &validation.capability_mismatches {
                 println!(
                     "  {} - {}: registry says {}, actual is {}",
-                    mismatch.language,
-                    mismatch.capability,
-                    mismatch.registry_says,
-                    mismatch.actual
+                    mismatch.language, mismatch.capability, mismatch.registry_says, mismatch.actual
                 );
             }
         }

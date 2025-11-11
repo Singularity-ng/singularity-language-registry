@@ -1,0 +1,121 @@
+name: Renovate
+
+on:
+  # Run on schedule (as defined in renovate.json5)
+  schedule:
+    # Run every 6 hours to catch security updates quickly
+    - cron: '0 */6 * * *'
+
+  # Allow manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Renovate log level'
+        required: false
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - info
+          - warn
+          - error
+      dryRun:
+        description: 'Dry run mode (no PRs created)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+  # Run on push to renovate config files (for testing)
+  push:
+    branches:
+      - development
+      - main
+    paths:
+      - '.github/workflows/renovate.yml'
+      - 'renovate.json5'
+      - '.github/renovate.json5'
+
+# Limit to one concurrent run
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  checks: write
+
+jobs:
+  renovate:
+    name: Renovate Dependencies
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get token for GitHub App
+        id: get_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.RENOVATE_APP_ID }}
+          private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
+        # Fall back to GITHUB_TOKEN if app credentials are not set
+        continue-on-error: true
+
+      - name: Self-hosted Renovate
+        uses: renovatebot/github-action@v40.3.12
+        env:
+          # Use GitHub App token if available, otherwise use GITHUB_TOKEN
+          RENOVATE_TOKEN: ${{ steps.get_token.outputs.token || secrets.GITHUB_TOKEN }}
+
+          # Repository configuration
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+
+          # Base branches from renovate.json5
+          RENOVATE_BASE_BRANCHES: development
+
+          # Log level
+          LOG_LEVEL: ${{ inputs.logLevel || 'info' }}
+
+          # Dry run mode for testing
+          RENOVATE_DRY_RUN: ${{ inputs.dryRun || 'false' }}
+
+          # Platform configuration
+          RENOVATE_PLATFORM: github
+          RENOVATE_ENDPOINT: https://api.github.com
+
+          # Git author
+          RENOVATE_GIT_AUTHOR: 'Renovate Bot <bot@renovateapp.com>'
+
+          # Use the config file in the repo
+          RENOVATE_CONFIG_FILE: renovate.json5
+
+          # Onboarding (disabled since config already exists)
+          RENOVATE_ONBOARDING: 'false'
+          RENOVATE_REQUIRE_CONFIG: 'required'
+
+          # Cache configuration for faster runs
+          RENOVATE_REPOSITORY_CACHE: enabled
+
+          # Auto-discover repositories
+          RENOVATE_AUTODISCOVER: 'false'
+
+          # Print config for debugging
+          RENOVATE_PRINT_CONFIG: 'true'
+
+      - name: Renovate summary
+        if: always()
+        run: |
+          echo "## Renovate Run Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Repository**: ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dry Run**: ${{ inputs.dryRun || 'false' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Log Level**: ${{ inputs.logLevel || 'info' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Check the Dependency Dashboard issue for details." >> $GITHUB_STEP_SUMMARY

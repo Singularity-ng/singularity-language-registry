@@ -53,53 +53,36 @@
 //! println!("Total languages: {}", stats.total_languages);
 //! ```
 
-pub mod registry;
 pub mod detection;
-pub mod utils;
 pub mod metadata;
+pub mod registry;
+pub mod utils;
 
 // Core registry exports
 pub use registry::{LanguageInfo, LanguageRegistry, PatternSignatures, LANGUAGE_REGISTRY};
 
 // Convenience functions for direct access
 pub use registry::{
-    detect_language,
-    get_language,
-    get_language_by_alias,
-    get_language_by_mime_type,
-    supported_languages,
-    rca_supported_languages,
-    ast_grep_supported_languages,
+    ast_grep_supported_languages, detect_language, get_language, get_language_by_alias,
+    get_language_by_mime_type, rca_supported_languages, supported_languages,
 };
 
 // Detection utilities
 pub use detection::{
-    detect_from_content,
-    detect_from_shebang,
-    detect_from_patterns,
-    detect_special_files,
+    detect_from_content, detect_from_patterns, detect_from_shebang, detect_special_files,
     is_detectable,
 };
 
 // Utility functions
 pub use utils::{
-    languages_by_families,
-    LanguageStats,
-    same_family,
-    recommended_linters,
-    file_patterns,
-    supports_feature,
-    AnalysisFeature,
+    file_patterns, languages_by_families, recommended_linters, same_family, supports_feature,
+    AnalysisFeature, LanguageStats,
 };
 
 // Metadata validation and reporting
 pub use metadata::{
-    validate_metadata,
-    generate_metadata_report,
-    get_known_support,
-    MetadataSource,
-    MetadataValidation,
-    CapabilityMismatch,
+    generate_metadata_report, get_known_support, validate_metadata, CapabilityMismatch,
+    MetadataSource, MetadataValidation,
 };
 
 // Version information

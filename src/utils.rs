@@ -61,6 +61,7 @@ pub fn same_family(lang1: &str, lang2: &str) -> bool {
 }
 
 /// Get recommended linters for a language
+#[must_use]
 pub fn recommended_linters(language: &str) -> Vec<&'static str> {
     match language {
         "rust" => vec!["clippy", "rustfmt"],
@@ -78,6 +79,7 @@ pub fn recommended_linters(language: &str) -> Vec<&'static str> {
 }
 
 /// Get common file patterns for a language (beyond extensions)
+#[must_use]
 pub fn file_patterns(language: &str) -> Vec<&'static str> {
     match language {
         "rust" => vec!["Cargo.toml", "Cargo.lock", "build.rs"],
@@ -115,15 +117,27 @@ pub fn supports_feature(language: &str, feature: AnalysisFeature) -> bool {
         AnalysisFeature::Complexity => {
             // Most compiled languages support complexity analysis
             lang.is_compiled || matches!(language, "python" | "javascript" | "typescript")
-        },
+        }
         AnalysisFeature::Security => {
             // Languages commonly used in web/system development
-            matches!(language, "rust" | "go" | "python" | "javascript" | "typescript" |
-                    "java" | "csharp" | "c" | "cpp" | "ruby" | "elixir")
-        },
+            matches!(
+                language,
+                "rust"
+                    | "go"
+                    | "python"
+                    | "javascript"
+                    | "typescript"
+                    | "java"
+                    | "csharp"
+                    | "c"
+                    | "cpp"
+                    | "ruby"
+                    | "elixir"
+            )
+        }
         AnalysisFeature::Performance => {
             // Compiled languages + performance-critical interpreted ones
             lang.is_compiled || matches!(language, "python" | "javascript" | "typescript")
-        },
+        }
     }
 }

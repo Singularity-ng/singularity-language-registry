@@ -5,6 +5,24 @@ Thank you for your interest in contributing! This document explains our developm
 ## 🚀 Quick Start
 
 1. **Setup development environment:**
+
+   **Option A: Nix (Recommended - Everything included)**
+   ```bash
+   # Clone the repository
+   git clone https://github.com/Singularity-ng/singularity-language-registry.git
+   cd singularity-language-registry
+
+   # Install Nix (if not already installed)
+   curl --proto '=https' --tlsv1.2 -sSL https://install.determinate.systems/nix | sh -s -- install
+
+   # Enable direnv for automatic environment loading
+   direnv allow
+
+   # Or manually enter dev shell
+   nix develop
+   ```
+
+   **Option B: Standard Rust (Manual tool installation)**
    ```bash
    # Clone the repository
    git clone https://github.com/Singularity-ng/singularity-language-registry.git
@@ -17,7 +35,7 @@ Thank you for your interest in contributing! This document explains our developm
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
    # Install development tools
-   cargo install cargo-audit cargo-outdated cargo-tarpaulin
+   cargo install cargo-edit cargo-watch cargo-nextest cargo-audit cargo-outdated
    ```
 
 2. **Create a feature branch:**
@@ -28,6 +46,15 @@ Thank you for your interest in contributing! This document explains our developm
    ```
 
 3. **Make your changes and test:**
+
+   **Using Nix + Just (Recommended):**
+   ```bash
+   just verify                  # Run all checks (fmt, clippy, test, audit)
+   just watch                   # Auto-run tests on file changes
+   nix flake check              # Run full CI locally
+   ```
+
+   **Using Cargo directly:**
    ```bash
    cargo fmt                    # Format code
    cargo clippy -- -D warnings  # Check for issues
@@ -203,10 +230,17 @@ Aim for >80% code coverage
 
 ## 💡 Tips
 
-- Run `cargo outdated` regularly
-- Use `cargo audit` for security checks
-- Profile with `cargo bench` for performance
-- Check docs with `cargo doc --open`
+**With Nix:**
+- Use `just` to see all available commands
+- Run `nix flake check` to test CI locally before pushing
+- Use `just watch` for instant feedback during development
+- All tools are pre-installed in the Nix dev shell
+
+**General:**
+- Run `cargo outdated` regularly (or `just outdated`)
+- Use `cargo audit` for security checks (or `just audit`)
+- Profile with `cargo bench` for performance (or `just bench`)
+- Check docs with `cargo doc --open` (or `just doc`)
 
 ## 📮 Getting Help
 
@@ -217,7 +251,15 @@ Aim for >80% code coverage
 
 ## 📄 License
 
-By contributing, you agree that your contributions will be licensed under the same license as the project (MIT/Apache-2.0).
+This is proprietary software. All rights reserved.
+
+By contributing, you agree that:
+1. Your contributions become the exclusive property of Singularity Team
+2. You assign all intellectual property rights to Singularity Team
+3. You waive any moral rights to your contributions
+4. You have the legal right to make these assignments
+
+Contributors may be required to sign a Contributor License Agreement (CLA) before contributions can be accepted.
 
 ---
 

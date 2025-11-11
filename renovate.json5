@@ -1,0 +1,238 @@
+// Renovate configuration for Singularity Language Registry
+// Optimized for Rust projects with GitHub Enterprise support
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+
+  // Base configuration presets
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommitTypeAll(chore)",
+    ":gitSignOff",
+    "helpers:pinGitHubActionDigests"
+  ],
+
+  // Target development branch for all updates
+  "baseBranches": ["development"],
+
+  // Scheduling - run on weekends to minimize disruption
+  "timezone": "UTC",
+  "schedule": [
+    "every weekend",
+    "before 5am on monday"
+  ],
+
+  // Rust-specific configuration
+  "rust": {
+    "enabled": true,
+    "bumpVersion": "patch" // Auto-bump version in Cargo.toml
+  },
+
+  // Cargo configuration
+  "cargo": {
+    "enabled": true,
+    "rangeStrategy": "update-lockfile", // Only update Cargo.lock, not Cargo.toml ranges
+    "lockFileMaintenance": {
+      "enabled": true,
+      "schedule": ["before 4am on monday"],
+      "automerge": true,
+      "automergeType": "pr"
+    }
+  },
+
+  // Package Rules - ordered by priority
+  "packageRules": [
+    // ===================
+    // Security Updates
+    // ===================
+    {
+      "description": "🚨 Security updates - merge immediately",
+      "matchDatasources": ["crate"],
+      "matchUpdateTypes": ["patch"],
+      "matchFiles": ["**/Cargo.toml"],
+      "vulnerabilityAlerts": {
+        "enabled": true
+      },
+      "prPriority": 10,
+      "labels": ["security", "urgent"],
+      "automerge": true,
+      "minimumReleaseAge": "0 days",
+      "schedule": ["at any time"] // Process security updates immediately
+    },
+
+    // ===================
+    // Auto-merge Rules
+    // ===================
+    {
+      "description": "✅ Auto-merge patch updates after stability period",
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "platformAutomerge": true,
+      "minimumReleaseAge": "3 days",
+      "internalChecksFilter": "strict"
+    },
+    {
+      "description": "🔧 Auto-merge dev dependencies",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "automergeSchedule": ["after 10am on sunday"]
+    },
+
+    // ===================
+    // Ecosystem Grouping
+    // ===================
+    {
+      "description": "📦 Group serde ecosystem updates",
+      "matchPackagePatterns": ["^serde"],
+      "groupName": "serde ecosystem"
+    },
+    {
+      "description": "🌳 Group tree-sitter parser updates",
+      "matchPackagePatterns": ["^tree-sitter"],
+      "groupName": "tree-sitter parsers",
+      "automerge": false // Manual review for parser compatibility
+    },
+    {
+      "description": "🦀 Group tokio async runtime",
+      "matchPackagePatterns": ["^tokio", "^hyper", "^tower"],
+      "groupName": "tokio ecosystem"
+    },
+
+    // ===================
+    // Major Updates
+    // ===================
+    {
+      "description": "⚠️ Major updates need manual review",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["breaking-change"],
+      "minimumReleaseAge": "7 days",
+      "prBodyNotes": ["**⚠️ BREAKING CHANGE**: This is a major version update that may require code changes."]
+    },
+
+    // ===================
+    // MSRV-sensitive
+    // ===================
+    {
+      "description": "🦀 MSRV-sensitive toolchain updates",
+      "matchPackageNames": [
+        "rust",
+        "rustc",
+        "cargo",
+        "clippy",
+        "rustfmt"
+      ],
+      "automerge": false,
+      "labels": ["msrv"],
+      "prBodyNotes": ["**Note**: This may affect the Minimum Supported Rust Version (currently 1.91.0)"]
+    },
+
+    // ===================
+    // Infrastructure
+    // ===================
+    {
+      "description": "❄️ Nix flake inputs",
+      "matchManagers": ["nix"],
+      "schedule": ["monthly"],
+      "automerge": false,
+      "labels": ["nix"],
+      "commitMessagePrefix": "chore(nix):"
+    },
+    {
+      "description": "🔧 GitHub Actions",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions",
+      "automerge": true,
+      "automergeType": "branch",
+      "minimumReleaseAge": "7 days"
+    },
+
+    // ===================
+    // Private Registry Support (GitHub Enterprise)
+    // ===================
+    {
+      "description": "🔒 Private crates from GitHub Packages",
+      "matchDatasources": ["crate"],
+      "matchPackagePatterns": ["@Singularity-ng/*"],
+      "registryUrls": ["https://github.com/Singularity-ng/_cargo-index/"],
+      "labels": ["internal"],
+      "automerge": false // Always review internal package updates
+    }
+  ],
+
+  // PR Configuration
+  "prConcurrentLimit": 5, // Max 5 PRs open at once
+  "prHourlyLimit": 2,     // Max 2 PRs per hour
+  "branchConcurrentLimit": 3, // Max 3 branches being updated
+
+  // Commit Message Format
+  "commitMessagePrefix": "chore(deps):",
+  "commitMessageAction": "update",
+  "commitMessageExtra": "to v{{newVersion}}",
+  "commitBodyTable": true,
+  "semanticCommits": "enabled",
+
+  // Dependency Dashboard Configuration
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "🤖 Dependency Dashboard",
+  "dependencyDashboardHeader": "This issue provides visibility into Renovate's dependency updates for the Singularity Language Registry.",
+  "dependencyDashboardFooter": "---\n_🔄 Auto-merge is enabled for: patch updates, dev dependencies, and security fixes._\n_📊 Run `cargo outdated` locally to see available updates._",
+  "dependencyDashboardAutoclose": true,
+  "dependencyDashboardApproval": false, // Don't require approval for updates
+
+  // Rebase Configuration
+  "rebaseWhen": "behind-base-branch",
+  "rebaseStalePrs": true,
+
+  // Labels
+  "labels": [
+    "dependencies",
+    "renovate"
+  ],
+
+  // Security Alerts
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"],
+    "automerge": true,
+    "minimumReleaseAge": "0 days"
+  },
+
+  // Post-update Commands
+  "postUpdateOptions": [
+    "cargoUpdateLockFile" // Update Cargo.lock after dependency changes
+  ],
+
+  // Assignees and Reviewers
+  "assignees": ["mikkihugo"],
+  "assignAutomerge": true,
+  "reviewers": [], // Add reviewers if needed: ["team:engineering"]
+
+  // Ignore Paths
+  "ignorePaths": [
+    "**/target/**",
+    "**/node_modules/**",
+    ".direnv/**"
+  ],
+
+  // Registry Configuration (supports GitHub Enterprise)
+  "registryUrls": [
+    "https://crates.io",
+    "https://github.com/Singularity-ng/_cargo-index/" // GitHub Packages for private crates
+  ],
+
+  // Additional Settings
+  "suppressNotifications": ["prIgnoreNotification"],
+  "platformAutomerge": true, // Use GitHub's auto-merge feature
+  "transitiveRemediation": true, // Update transitive dependencies for security
+
+  // GitHub Enterprise Compatibility
+  "hostRules": [
+    {
+      "hostType": "github",
+      "matchHost": "github.com",
+      "token": "{{ secrets.GITHUB_TOKEN }}" // Will use GitHub App token or PAT
+    }
+  ]
+}

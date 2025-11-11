@@ -2,13 +2,73 @@
 name = "singularity-language-registry"
 version = "0.1.0"
 edition = "2021"
-license = "MIT OR Apache-2.0"
+license-file = "LICENSE"
 authors = ["Singularity Team"]
 description = "Centralized language registry for all Singularity analysis engines"
 repository = "https://github.com/singularity/singularity"
 readme = "README.md"
 keywords = ["language", "registry", "detection", "parsing", "analysis"]
 categories = ["development-tools"]
+documentation = "https://singularity-ng.github.io/singularity-language-registry/"
+homepage = "https://github.com/singularity/singularity"
+
+# Exclude development/CI files from crates.io package
+exclude = [
+    # CI/CD
+    ".github/",
+
+    # Nix development environment
+    "flake.nix",
+    "flake.lock",
+    ".envrc",
+    ".envrc.local",
+    ".envrc.local.example",
+    ".direnv/",
+    "result",
+    "result-*",
+
+    # Development tooling
+    "justfile",
+    "setup-hooks.sh",
+    ".git-hooks/",
+
+    # Build artifacts
+    "release-reports/",
+    "target/",
+    "*.profraw",
+    "*.profdata",
+
+    # Documentation (internal/setup guides - not for end users)
+    "DOCS_SETUP.md",
+    "WORKFLOWS_SETUP.md",
+    "AUTO_MERGE_FLOW.md",
+    "GITHUB_SETUP_COMPLETE.md",
+    "RENOVATE.md",
+    "FLAKEHUB_SETUP.md",
+    "PRIVATE_CRATES.md",
+    "CACHE_SETUP.md",
+    "CARGO_TOOLS.md",
+    "REFACTORING_SUMMARY.md",
+    "RELEASE_REPORTS_SUMMARY.md",
+    "COMPLETE_SUMMARY.md",
+    "CRATE_PACKAGING.md",
+
+    # IDE
+    ".vscode/",
+    ".idea/",
+    "*.swp",
+    "*.swo",
+
+    # Misc
+    ".DS_Store",
+    "Thumbs.db",
+]
+
+# Documentation metadata for docs.rs and rustdoc
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 
 [lib]
 name = "singularity_language_registry"
