@@ -20,6 +20,9 @@ jobs:
   nix-check:
     name: Nix Checks
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # Required for FlakeHub Cache authentication
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -49,9 +52,7 @@ jobs:
 
       # Layer 3: FlakeHub binary cache
       - name: Setup FlakeHub Cache
-        uses: DeterminateSystems/flakehub-cache-action@v1
-        env:
-          FLAKEHUB_PUSH_TOKEN: ${{ secrets.FLAKEHUB_PUSH_TOKEN }}
+        uses: DeterminateSystems/flakehub-cache-action@v2
 
       # Layer 4: Cachix binary cache
       - name: Setup Cachix Cache
