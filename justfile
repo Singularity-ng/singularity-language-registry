@@ -201,9 +201,14 @@ release-reports:
     cargo tarpaulin --all-features --out Stdout 2>&1 | tee -a release-reports/coverage-report.md || true
     echo "\`\`\`" >> release-reports/coverage-report.md
 
+    # Copy user-focused AGENTS.md for release
+    echo "🤖 Including user-focused AGENTS.md for release..."
+    cp AGENTS.md.release release-reports/AGENTS.md
+
     echo ""
     echo "✅ Reports generated in ./release-reports/"
     echo "   - clippy-report.md"
     echo "   - security-audit.md"
     echo "   - sbom.md"
     echo "   - coverage-report.md"
+    echo "   - AGENTS.md (user-focused)"

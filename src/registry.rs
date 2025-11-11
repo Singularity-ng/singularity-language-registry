@@ -26,6 +26,7 @@ use std::sync::LazyLock;
 /// - ✅ Language features: `Result<`, `async`, `await`, `?`, `try:`, `catch`
 /// - ❌ Libraries: `kafka`, `reqwest`, `express` (these go in `CentralCloud`!)
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[non_exhaustive]
 pub struct PatternSignatures {
     /// Error handling SYNTAX (language keywords, not libraries)
     /// Examples: `Result<`, `?`, `unwrap` for Rust, `try:`, `except` for Python
@@ -46,6 +47,11 @@ pub struct PatternSignatures {
 
 /// Comprehensive language information
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "Boolean flags for language capabilities are semantically clear and independent"
+)]
+#[non_exhaustive]
 pub struct LanguageInfo {
     /// Unique language identifier (e.g., `"rust"`, `"elixir"`)
     pub id: String,
@@ -73,6 +79,7 @@ pub struct LanguageInfo {
 }
 
 /// Central language registry with optimized lookups
+#[derive(Debug)]
 pub struct LanguageRegistry {
     /// Primary language storage by ID
     languages: HashMap<String, LanguageInfo>,
@@ -101,397 +108,393 @@ impl LanguageRegistry {
     }
 
     /// Register all supported languages
-    #[allow(clippy::too_many_lines)]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Language registration data is necessarily large; splitting would reduce readability"
+    )]
     fn register_all_languages(&mut self) {
         // BEAM Languages
         self.register_language(LanguageInfo {
-            id: "elixir".to_string(),
-            name: "Elixir".to_string(),
-            extensions: vec!["ex".to_string(), "exs".to_string()],
-            aliases: vec!["elixir".to_string()],
-            tree_sitter_language: Some("elixir".to_string()),
+            id: "elixir".to_owned(),
+            name: "Elixir".to_owned(),
+            extensions: vec!["ex".to_owned(), "exs".to_owned()],
+            aliases: vec!["elixir".to_owned()],
+            tree_sitter_language: Some("elixir".to_owned()),
             rca_supported: false,
             ast_grep_supported: true,
             mime_types: vec![
-                "text/x-elixir".to_string(),
-                "application/x-elixir".to_string(),
+                "text/x-elixir".to_owned(),
+                "application/x-elixir".to_owned(),
             ],
-            family: Some("BEAM".to_string()),
+            family: Some("BEAM".to_owned()),
             is_compiled: true,
             pattern_signatures: PatternSignatures::default(),
         });
 
         self.register_language(LanguageInfo {
-            id: "erlang".to_string(),
-            name: "Erlang".to_string(),
-            extensions: vec!["erl".to_string(), "hrl".to_string()],
-            aliases: vec!["erlang".to_string()],
-            tree_sitter_language: Some("erlang".to_string()),
+            id: "erlang".to_owned(),
+            name: "Erlang".to_owned(),
+            extensions: vec!["erl".to_owned(), "hrl".to_owned()],
+            aliases: vec!["erlang".to_owned()],
+            tree_sitter_language: Some("erlang".to_owned()),
             rca_supported: false,
             ast_grep_supported: true,
             mime_types: vec![
-                "text/x-erlang".to_string(),
-                "application/x-erlang".to_string(),
+                "text/x-erlang".to_owned(),
+                "application/x-erlang".to_owned(),
             ],
-            family: Some("BEAM".to_string()),
+            family: Some("BEAM".to_owned()),
             is_compiled: true,
             pattern_signatures: PatternSignatures::default(),
         });
 
         self.register_language(LanguageInfo {
-            id: "gleam".to_string(),
-            name: "Gleam".to_string(),
-            extensions: vec!["gleam".to_string()],
-            aliases: vec!["gleam".to_string()],
-            tree_sitter_language: Some("gleam".to_string()),
+            id: "gleam".to_owned(),
+            name: "Gleam".to_owned(),
+            extensions: vec!["gleam".to_owned()],
+            aliases: vec!["gleam".to_owned()],
+            tree_sitter_language: Some("gleam".to_owned()),
             rca_supported: false,
             ast_grep_supported: true,
-            mime_types: vec![
-                "text/x-gleam".to_string(),
-                "application/x-gleam".to_string(),
-            ],
-            family: Some("BEAM".to_string()),
+            mime_types: vec!["text/x-gleam".to_owned(), "application/x-gleam".to_owned()],
+            family: Some("BEAM".to_owned()),
             is_compiled: true,
             pattern_signatures: PatternSignatures::default(),
         });
 
         // Systems Programming Languages
         self.register_language(LanguageInfo {
-            id: "rust".to_string(),
-            name: "Rust".to_string(),
-            extensions: vec!["rs".to_string()],
-            aliases: vec!["rust".to_string()],
-            tree_sitter_language: Some("rust".to_string()),
+            id: "rust".to_owned(),
+            name: "Rust".to_owned(),
+            extensions: vec!["rs".to_owned()],
+            aliases: vec!["rust".to_owned()],
+            tree_sitter_language: Some("rust".to_owned()),
             rca_supported: true,
             ast_grep_supported: true,
-            mime_types: vec!["text/x-rust".to_string(), "application/x-rust".to_string()],
-            family: Some("Systems".to_string()),
+            mime_types: vec!["text/x-rust".to_owned(), "application/x-rust".to_owned()],
+            family: Some("Systems".to_owned()),
             is_compiled: true,
             pattern_signatures: PatternSignatures {
                 // Only language syntax, NOT libraries!
                 error_handling_syntax: vec![
-                    "Result<".to_string(),
-                    "Option<".to_string(),
-                    "?".to_string(),
-                    "unwrap".to_string(),
-                    "expect".to_string(),
+                    "Result<".to_owned(),
+                    "Option<".to_owned(),
+                    "?".to_owned(),
+                    "unwrap".to_owned(),
+                    "expect".to_owned(),
                 ],
-                async_syntax: vec![
-                    "async".to_string(),
-                    "await".to_string(),
-                    ".await".to_string(),
-                ],
+                async_syntax: vec!["async".to_owned(), "await".to_owned(), ".await".to_owned()],
                 testing_syntax: vec![
-                    "#[test]".to_string(),
-                    "assert!".to_string(),
-                    "assert_eq!".to_string(),
-                    "#[cfg(test)]".to_string(),
+                    "#[test]".to_owned(),
+                    "assert!".to_owned(),
+                    "assert_eq!".to_owned(),
+                    "#[cfg(test)]".to_owned(),
                 ],
                 pattern_matching_syntax: vec![
-                    "match".to_string(),
-                    "if let".to_string(),
-                    "while let".to_string(),
+                    "match".to_owned(),
+                    "if let".to_owned(),
+                    "while let".to_owned(),
                 ],
                 module_syntax: vec![
-                    "use".to_string(),
-                    "mod".to_string(),
-                    "pub".to_string(),
-                    "crate::".to_string(),
+                    "use".to_owned(),
+                    "mod".to_owned(),
+                    "pub".to_owned(),
+                    "crate::".to_owned(),
                 ],
             },
         });
 
         self.register_language(LanguageInfo {
-            id: "c".to_string(),
-            name: "C".to_string(),
-            extensions: vec!["c".to_string(), "h".to_string()],
-            aliases: vec!["c".to_string()],
-            tree_sitter_language: Some("c".to_string()),
+            id: "c".to_owned(),
+            name: "C".to_owned(),
+            extensions: vec!["c".to_owned(), "h".to_owned()],
+            aliases: vec!["c".to_owned()],
+            tree_sitter_language: Some("c".to_owned()),
             rca_supported: true,
             ast_grep_supported: true,
-            mime_types: vec!["text/x-c".to_string(), "text/x-csrc".to_string()],
-            family: Some("C-like".to_string()),
+            mime_types: vec!["text/x-c".to_owned(), "text/x-csrc".to_owned()],
+            family: Some("C-like".to_owned()),
             is_compiled: true,
             pattern_signatures: PatternSignatures::default(),
         });
 
         self.register_language(LanguageInfo {
-            id: "cpp".to_string(),
-            name: "C++".to_string(),
+            id: "cpp".to_owned(),
+            name: "C++".to_owned(),
             extensions: vec![
-                "cpp".to_string(),
-                "cc".to_string(),
-                "cxx".to_string(),
-                "c++".to_string(),
-                "hpp".to_string(),
+                "cpp".to_owned(),
+                "cc".to_owned(),
+                "cxx".to_owned(),
+                "c++".to_owned(),
+                "hpp".to_owned(),
             ],
-            aliases: vec![
-                "cpp".to_string(),
-                "c++".to_string(),
-                "cplusplus".to_string(),
-            ],
-            tree_sitter_language: Some("cpp".to_string()),
+            aliases: vec!["cpp".to_owned(), "c++".to_owned(), "cplusplus".to_owned()],
+            tree_sitter_language: Some("cpp".to_owned()),
             rca_supported: true,
             ast_grep_supported: true,
-            mime_types: vec!["text/x-c++".to_string(), "text/x-cpp".to_string()],
-            family: Some("C-like".to_string()),
+            mime_types: vec!["text/x-c++".to_owned(), "text/x-cpp".to_owned()],
+            family: Some("C-like".to_owned()),
             is_compiled: true,
             pattern_signatures: PatternSignatures::default(),
         });
 
         // Web Technologies
         self.register_language(LanguageInfo {
-            id: "javascript".to_string(),
-            name: "JavaScript".to_string(),
-            extensions: vec!["js".to_string(), "jsx".to_string()],
-            aliases: vec!["javascript".to_string(), "js".to_string()],
-            tree_sitter_language: Some("javascript".to_string()),
+            id: "javascript".to_owned(),
+            name: "JavaScript".to_owned(),
+            extensions: vec!["js".to_owned(), "jsx".to_owned()],
+            aliases: vec!["javascript".to_owned(), "js".to_owned()],
+            tree_sitter_language: Some("javascript".to_owned()),
             rca_supported: true,
             ast_grep_supported: true,
             mime_types: vec![
-                "text/javascript".to_string(),
-                "application/javascript".to_string(),
+                "text/javascript".to_owned(),
+                "application/javascript".to_owned(),
             ],
-            family: Some("Web".to_string()),
+            family: Some("Web".to_owned()),
             is_compiled: false,
             pattern_signatures: PatternSignatures::default(),
         });
 
         self.register_language(LanguageInfo {
-            id: "typescript".to_string(),
-            name: "TypeScript".to_string(),
-            extensions: vec!["ts".to_string(), "tsx".to_string()],
-            aliases: vec!["typescript".to_string(), "ts".to_string()],
-            tree_sitter_language: Some("typescript".to_string()),
+            id: "typescript".to_owned(),
+            name: "TypeScript".to_owned(),
+            extensions: vec!["ts".to_owned(), "tsx".to_owned()],
+            aliases: vec!["typescript".to_owned(), "ts".to_owned()],
+            tree_sitter_language: Some("typescript".to_owned()),
             rca_supported: true,
             ast_grep_supported: true,
             mime_types: vec![
-                "text/typescript".to_string(),
-                "application/typescript".to_string(),
+                "text/typescript".to_owned(),
+                "application/typescript".to_owned(),
             ],
-            family: Some("Web".to_string()),
+            family: Some("Web".to_owned()),
             is_compiled: true,
             pattern_signatures: PatternSignatures::default(),
         });
 
         // High-Level Languages
         self.register_language(LanguageInfo {
-            id: "python".to_string(),
-            name: "Python".to_string(),
-            extensions: vec!["py".to_string(), "pyw".to_string()],
-            aliases: vec!["python".to_string(), "py".to_string()],
-            tree_sitter_language: Some("python".to_string()),
+            id: "python".to_owned(),
+            name: "Python".to_owned(),
+            extensions: vec!["py".to_owned(), "pyw".to_owned()],
+            aliases: vec!["python".to_owned(), "py".to_owned()],
+            tree_sitter_language: Some("python".to_owned()),
             rca_supported: true,
             ast_grep_supported: true,
             mime_types: vec![
-                "text/x-python".to_string(),
-                "application/x-python".to_string(),
+                "text/x-python".to_owned(),
+                "application/x-python".to_owned(),
             ],
-            family: Some("Scripting".to_string()),
+            family: Some("Scripting".to_owned()),
             is_compiled: false,
             pattern_signatures: PatternSignatures::default(),
         });
 
         self.register_language(LanguageInfo {
-            id: "java".to_string(),
-            name: "Java".to_string(),
-            extensions: vec!["java".to_string()],
-            aliases: vec!["java".to_string()],
-            tree_sitter_language: Some("java".to_string()),
+            id: "java".to_owned(),
+            name: "Java".to_owned(),
+            extensions: vec!["java".to_owned()],
+            aliases: vec!["java".to_owned()],
+            tree_sitter_language: Some("java".to_owned()),
             rca_supported: true,
             ast_grep_supported: true,
-            mime_types: vec!["text/x-java".to_string(), "application/x-java".to_string()],
-            family: Some("JVM".to_string()),
+            mime_types: vec!["text/x-java".to_owned(), "application/x-java".to_owned()],
+            family: Some("JVM".to_owned()),
             is_compiled: true,
             pattern_signatures: PatternSignatures::default(),
         });
 
         self.register_language(LanguageInfo {
-            id: "csharp".to_string(),
-            name: "C#".to_string(),
-            extensions: vec!["cs".to_string()],
-            aliases: vec!["csharp".to_string(), "cs".to_string(), "c#".to_string()],
-            tree_sitter_language: Some("c_sharp".to_string()),
+            id: "csharp".to_owned(),
+            name: "C#".to_owned(),
+            extensions: vec!["cs".to_owned()],
+            aliases: vec!["csharp".to_owned(), "cs".to_owned(), "c#".to_owned()],
+            tree_sitter_language: Some("c_sharp".to_owned()),
             rca_supported: true,
             ast_grep_supported: true,
             mime_types: vec![
-                "text/x-csharp".to_string(),
-                "application/x-csharp".to_string(),
+                "text/x-csharp".to_owned(),
+                "application/x-csharp".to_owned(),
             ],
-            family: Some("CLR".to_string()),
+            family: Some("CLR".to_owned()),
             is_compiled: true,
             pattern_signatures: PatternSignatures::default(),
         });
 
         self.register_language(LanguageInfo {
-            id: "go".to_string(),
-            name: "Go".to_string(),
-            extensions: vec!["go".to_string()],
-            aliases: vec!["go".to_string(), "golang".to_string()],
-            tree_sitter_language: Some("go".to_string()),
+            id: "go".to_owned(),
+            name: "Go".to_owned(),
+            extensions: vec!["go".to_owned()],
+            aliases: vec!["go".to_owned(), "golang".to_owned()],
+            tree_sitter_language: Some("go".to_owned()),
             rca_supported: true,
             ast_grep_supported: true,
-            mime_types: vec!["text/x-go".to_string(), "application/x-go".to_string()],
-            family: Some("Systems".to_string()),
+            mime_types: vec!["text/x-go".to_owned(), "application/x-go".to_owned()],
+            family: Some("Systems".to_owned()),
             is_compiled: true,
             pattern_signatures: PatternSignatures::default(),
         });
 
         // JVM Languages
         self.register_language(LanguageInfo {
-            id: "kotlin".to_string(),
-            name: "Kotlin".to_string(),
-            extensions: vec!["kt".to_string(), "kts".to_string()],
-            aliases: vec!["kotlin".to_string()],
-            tree_sitter_language: Some("kotlin".to_string()),
+            id: "kotlin".to_owned(),
+            name: "Kotlin".to_owned(),
+            extensions: vec!["kt".to_owned(), "kts".to_owned()],
+            aliases: vec!["kotlin".to_owned()],
+            tree_sitter_language: Some("kotlin".to_owned()),
             rca_supported: true,
             ast_grep_supported: true,
             mime_types: vec![
-                "text/x-kotlin".to_string(),
-                "application/x-kotlin".to_string(),
+                "text/x-kotlin".to_owned(),
+                "application/x-kotlin".to_owned(),
             ],
-            family: Some("JVM".to_string()),
+            family: Some("JVM".to_owned()),
             is_compiled: true,
             pattern_signatures: PatternSignatures::default(),
         });
 
         // Scripting Languages
         self.register_language(LanguageInfo {
-            id: "lua".to_string(),
-            name: "Lua".to_string(),
-            extensions: vec!["lua".to_string()],
-            aliases: vec!["lua".to_string()],
-            tree_sitter_language: Some("lua".to_string()),
+            id: "lua".to_owned(),
+            name: "Lua".to_owned(),
+            extensions: vec!["lua".to_owned()],
+            aliases: vec!["lua".to_owned()],
+            tree_sitter_language: Some("lua".to_owned()),
             rca_supported: true,
             ast_grep_supported: true,
-            mime_types: vec!["text/x-lua".to_string(), "application/x-lua".to_string()],
-            family: Some("Scripting".to_string()),
+            mime_types: vec!["text/x-lua".to_owned(), "application/x-lua".to_owned()],
+            family: Some("Scripting".to_owned()),
             is_compiled: false,
             pattern_signatures: PatternSignatures::default(),
         });
 
         self.register_language(LanguageInfo {
-            id: "bash".to_string(),
-            name: "Bash".to_string(),
-            extensions: vec!["sh".to_string(), "bash".to_string()],
-            aliases: vec!["bash".to_string(), "sh".to_string(), "shell".to_string()],
-            tree_sitter_language: Some("bash".to_string()),
+            id: "bash".to_owned(),
+            name: "Bash".to_owned(),
+            extensions: vec!["sh".to_owned(), "bash".to_owned()],
+            aliases: vec!["bash".to_owned(), "sh".to_owned(), "shell".to_owned()],
+            tree_sitter_language: Some("bash".to_owned()),
             rca_supported: false,
             ast_grep_supported: true,
-            mime_types: vec!["text/x-sh".to_string(), "application/x-sh".to_string()],
-            family: Some("Shell".to_string()),
+            mime_types: vec!["text/x-sh".to_owned(), "application/x-sh".to_owned()],
+            family: Some("Shell".to_owned()),
             is_compiled: false,
             pattern_signatures: PatternSignatures::default(),
         });
 
         // Data Formats
         self.register_language(LanguageInfo {
-            id: "json".to_string(),
-            name: "JSON".to_string(),
-            extensions: vec!["json".to_string()],
-            aliases: vec!["json".to_string()],
-            tree_sitter_language: Some("json".to_string()),
+            id: "json".to_owned(),
+            name: "JSON".to_owned(),
+            extensions: vec!["json".to_owned()],
+            aliases: vec!["json".to_owned()],
+            tree_sitter_language: Some("json".to_owned()),
             rca_supported: false,
             ast_grep_supported: true,
-            mime_types: vec!["application/json".to_string()],
-            family: Some("Data".to_string()),
+            mime_types: vec!["application/json".to_owned()],
+            family: Some("Data".to_owned()),
             is_compiled: false,
             pattern_signatures: PatternSignatures::default(),
         });
 
         self.register_language(LanguageInfo {
-            id: "yaml".to_string(),
-            name: "YAML".to_string(),
-            extensions: vec!["yaml".to_string(), "yml".to_string()],
-            aliases: vec!["yaml".to_string(), "yml".to_string()],
-            tree_sitter_language: Some("yaml".to_string()),
+            id: "yaml".to_owned(),
+            name: "YAML".to_owned(),
+            extensions: vec!["yaml".to_owned(), "yml".to_owned()],
+            aliases: vec!["yaml".to_owned(), "yml".to_owned()],
+            tree_sitter_language: Some("yaml".to_owned()),
             rca_supported: false,
             ast_grep_supported: true,
-            mime_types: vec!["text/yaml".to_string(), "application/x-yaml".to_string()],
-            family: Some("Data".to_string()),
+            mime_types: vec!["text/yaml".to_owned(), "application/x-yaml".to_owned()],
+            family: Some("Data".to_owned()),
             is_compiled: false,
             pattern_signatures: PatternSignatures::default(),
         });
 
         self.register_language(LanguageInfo {
-            id: "toml".to_string(),
-            name: "TOML".to_string(),
-            extensions: vec!["toml".to_string()],
-            aliases: vec!["toml".to_string()],
-            tree_sitter_language: Some("toml".to_string()),
+            id: "toml".to_owned(),
+            name: "TOML".to_owned(),
+            extensions: vec!["toml".to_owned()],
+            aliases: vec!["toml".to_owned()],
+            tree_sitter_language: Some("toml".to_owned()),
             rca_supported: false,
             ast_grep_supported: true,
-            mime_types: vec!["text/x-toml".to_string(), "application/toml".to_string()],
-            family: Some("Data".to_string()),
+            mime_types: vec!["text/x-toml".to_owned(), "application/toml".to_owned()],
+            family: Some("Data".to_owned()),
             is_compiled: false,
             pattern_signatures: PatternSignatures::default(),
         });
 
         // Documentation
         self.register_language(LanguageInfo {
-            id: "markdown".to_string(),
-            name: "Markdown".to_string(),
-            extensions: vec!["md".to_string(), "markdown".to_string()],
-            aliases: vec!["markdown".to_string(), "md".to_string()],
-            tree_sitter_language: Some("markdown".to_string()),
+            id: "markdown".to_owned(),
+            name: "Markdown".to_owned(),
+            extensions: vec!["md".to_owned(), "markdown".to_owned()],
+            aliases: vec!["markdown".to_owned(), "md".to_owned()],
+            tree_sitter_language: Some("markdown".to_owned()),
             rca_supported: false,
             ast_grep_supported: true,
-            mime_types: vec!["text/markdown".to_string(), "text/x-markdown".to_string()],
-            family: Some("Documentation".to_string()),
+            mime_types: vec!["text/markdown".to_owned(), "text/x-markdown".to_owned()],
+            family: Some("Documentation".to_owned()),
             is_compiled: false,
             pattern_signatures: PatternSignatures::default(),
         });
 
         // Infrastructure
         self.register_language(LanguageInfo {
-            id: "dockerfile".to_string(),
-            name: "Dockerfile".to_string(),
-            extensions: vec!["dockerfile".to_string(), "Dockerfile".to_string()],
-            aliases: vec!["dockerfile".to_string(), "docker".to_string()],
-            tree_sitter_language: Some("dockerfile".to_string()),
+            id: "dockerfile".to_owned(),
+            name: "Dockerfile".to_owned(),
+            extensions: vec!["dockerfile".to_owned(), "Dockerfile".to_owned()],
+            aliases: vec!["dockerfile".to_owned(), "docker".to_owned()],
+            tree_sitter_language: Some("dockerfile".to_owned()),
             rca_supported: false,
             ast_grep_supported: true,
-            mime_types: vec!["text/x-dockerfile".to_string()],
-            family: Some("Infrastructure".to_string()),
+            mime_types: vec!["text/x-dockerfile".to_owned()],
+            family: Some("Infrastructure".to_owned()),
             is_compiled: false,
             pattern_signatures: PatternSignatures::default(),
         });
 
         self.register_language(LanguageInfo {
-            id: "sql".to_string(),
-            name: "SQL".to_string(),
-            extensions: vec!["sql".to_string()],
-            aliases: vec!["sql".to_string()],
-            tree_sitter_language: Some("sql".to_string()),
+            id: "sql".to_owned(),
+            name: "SQL".to_owned(),
+            extensions: vec!["sql".to_owned()],
+            aliases: vec!["sql".to_owned()],
+            tree_sitter_language: Some("sql".to_owned()),
             rca_supported: false,
             ast_grep_supported: true,
-            mime_types: vec!["text/x-sql".to_string(), "application/sql".to_string()],
-            family: Some("Database".to_string()),
+            mime_types: vec!["text/x-sql".to_owned(), "application/sql".to_owned()],
+            family: Some("Database".to_owned()),
             is_compiled: false,
             pattern_signatures: PatternSignatures::default(),
         });
     }
 
     /// Register a single language
+    #[allow(
+        clippy::indexing_slicing,
+        reason = "Indexing is safe here - we just inserted the language with this ID"
+    )]
     fn register_language(&mut self, language: LanguageInfo) {
         let id = language.id.clone();
 
-        // Store the language
-        self.languages.insert(id.clone(), language);
+        // Store the language (we don't care about previous value, if any)
+        let _prev = self.languages.insert(id.clone(), language);
 
         // Build extension map
         for ext in &self.languages[&id].extensions {
-            self.extension_map.insert(ext.clone(), id.clone());
+            let _prev = self.extension_map.insert(ext.clone(), id.clone());
         }
 
         // Build alias map
         for alias in &self.languages[&id].aliases {
-            self.alias_map.insert(alias.clone(), id.clone());
+            let _prev = self.alias_map.insert(alias.clone(), id.clone());
         }
 
         // Build MIME type map
         for mime_type in &self.languages[&id].mime_types {
-            self.mime_map.insert(mime_type.clone(), id.clone());
+            let _prev = self.mime_map.insert(mime_type.clone(), id.clone());
         }
     }
 
@@ -655,6 +658,12 @@ pub fn get_language_by_mime_type(mime_type: &str) -> Option<&'static LanguageInf
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    clippy::missing_panics_doc,
+    reason = "Tests are allowed to panic on unexpected conditions for clearer test failures"
+)]
 mod tests {
     use super::*;
     use std::path::Path;
@@ -666,8 +675,8 @@ mod tests {
         let language = detect_language(elixir_path).unwrap();
         assert_eq!(language.id, "elixir");
         assert_eq!(language.name, "Elixir");
-        assert!(language.extensions.contains(&"ex".to_string()));
-        assert!(language.extensions.contains(&"exs".to_string()));
+        assert!(language.extensions.contains(&"ex".to_owned()));
+        assert!(language.extensions.contains(&"exs".to_owned()));
         assert!(!language.rca_supported);
         assert!(language.ast_grep_supported);
 
@@ -684,7 +693,7 @@ mod tests {
         let language = detect_language(js_path).unwrap();
         assert_eq!(language.id, "javascript");
         assert_eq!(language.name, "JavaScript");
-        assert!(language.aliases.contains(&"js".to_string()));
+        assert!(language.aliases.contains(&"js".to_owned()));
     }
 
     #[test]

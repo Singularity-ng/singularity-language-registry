@@ -1,0 +1,138 @@
+name: Reusable Rust + Nix CI
+
+on:
+  workflow_call:
+    inputs:
+      enable-coverage:
+        description: 'Enable code coverage reporting'
+        required: false
+        type: boolean
+        default: false
+      enable-benchmarks:
+        description: 'Run benchmarks'
+        required: false
+        type: boolean
+        default: false
+      rust-version:
+        description: 'Rust version to use (stable, nightly, or specific version)'
+        required: false
+        type: string
+        default: 'stable'
+      os-matrix:
+        description: 'JSON array of OS to test on'
+        required: false
+        type: string
+        default: '["ubuntu-latest", "macos-latest"]'
+
+jobs:
+  nix-check:
+    name: Nix Checks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJson(inputs.os-matrix) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Cache Nix Store
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/nix
+            /nix/var/nix
+          key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-keys: |
+            nix-${{ runner.os }}-
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v12
+        with:
+          extra-conf: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Setup Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v8
+
+      - name: Setup FlakeHub Cache
+        uses: DeterminateSystems/flakehub-cache-action@v7
+        if: runner.os == 'Linux'
+
+      - name: Setup Cachix Cache
+        uses: cachix/cachix-action@v15
+        if: vars.CACHIX_CACHE_NAME != ''
+        with:
+          name: ${{ vars.CACHIX_CACHE_NAME }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Run Nix Flake Checks
+        run: nix flake check -L --show-trace
+
+      - name: Show flake info
+        run: nix flake show
+
+  coverage:
+    name: Code Coverage
+    if: inputs.enable-coverage
+    needs: nix-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v12
+
+      - name: Setup Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v8
+
+      - name: Generate coverage report
+        run: |
+          nix develop --command cargo tarpaulin --all-features --out Xml --output-dir ./coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: github.event_name == 'push'
+        with:
+          files: ./coverage/cobertura.xml
+          fail_ci_if_error: false
+
+  benchmarks:
+    name: Benchmarks
+    if: inputs.enable-benchmarks
+    needs: nix-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v12
+
+      - name: Setup Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v8
+
+      - name: Run benchmarks
+        run: nix develop --command cargo bench --all-features
+
+  results:
+    name: CI Results
+    if: always()
+    needs: [nix-check, coverage, benchmarks]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          if [ "${{ needs.nix-check.result }}" = "failure" ]; then
+            echo "❌ Nix checks failed"
+            exit 1
+          fi
+          if [ "${{ needs.coverage.result }}" = "failure" ]; then
+            echo "⚠️ Coverage failed (non-blocking)"
+          fi
+          if [ "${{ needs.benchmarks.result }}" = "failure" ]; then
+            echo "⚠️ Benchmarks failed (non-blocking)"
+          fi
+          echo "✅ CI passed"

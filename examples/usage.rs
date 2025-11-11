@@ -2,6 +2,13 @@
 //!
 //! Run with: `cargo run --example usage`
 
+#![allow(
+    clippy::print_stdout,
+    clippy::use_debug,
+    clippy::too_many_lines,
+    reason = "Examples are meant to demonstrate usage and print output to the user"
+)]
+
 use singularity_language_registry::{
     ast_grep_supported_languages, detect_from_content, detect_language, get_language,
     get_language_by_alias, is_detectable, languages_by_families, rca_supported_languages,
@@ -10,6 +17,10 @@ use singularity_language_registry::{
 };
 use std::path::Path;
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "Example code demonstrating various features"
+)]
 fn main() {
     println!("=== Singularity Language Registry Examples ===\n");
 
@@ -22,7 +33,7 @@ fn main() {
             Ok(lang) => {
                 println!("  {} -> {} (family: {:?})", file, lang.name, lang.family);
             }
-            Err(_) => println!("  {} -> Unknown", file),
+            Err(_) => println!("  {file} -> Unknown"),
         }
     }
 
@@ -52,9 +63,9 @@ fn main() {
     // 5. Language families
     println!("\n5. Language Families:");
     let families = languages_by_families();
-    for (family, langs) in families.iter() {
+    for (family, langs) in &families {
         let lang_names: Vec<&str> = langs.iter().map(|l| l.name.as_str()).collect();
-        println!("  {} family: {:?}", family, lang_names);
+        println!("  {family} family: {lang_names:?}");
     }
 
     // 6. Content detection
@@ -93,7 +104,7 @@ fn main() {
     println!("\n9. Recommended Linters:");
     for lang in ["rust", "elixir", "javascript"] {
         let linters = recommended_linters(lang);
-        println!("  {} -> {:?}", lang, linters);
+        println!("  {lang} -> {linters:?}");
     }
 
     // 10. Feature support
@@ -105,7 +116,7 @@ fn main() {
     ];
     for (lang, feature) in features {
         let supported = supports_feature(lang, feature);
-        println!("  {} supports {:?}: {}", lang, feature, supported);
+        println!("  {lang} supports {feature:?}: {supported}");
     }
 
     // 11. List all supported languages
@@ -113,13 +124,13 @@ fn main() {
     let all = supported_languages();
     println!("  Total: {} languages", all.len());
     let names: Vec<&str> = all.iter().take(5).map(|l| l.name.as_str()).collect();
-    println!("  First 5: {:?} ...", names);
+    println!("  First 5: {names:?} ...");
 
     // 12. RCA supported languages
     println!("\n12. RCA Supported Languages:");
     let rca = rca_supported_languages();
     let rca_names: Vec<&str> = rca.iter().map(|l| l.name.as_str()).collect();
-    println!("  RCA languages: {:?}", rca_names);
+    println!("  RCA languages: {rca_names:?}");
 
     // 13. AST-Grep supported languages
     println!("\n13. AST-Grep Supported Languages:");

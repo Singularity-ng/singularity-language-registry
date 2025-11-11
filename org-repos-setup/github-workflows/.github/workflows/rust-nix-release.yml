@@ -1,0 +1,256 @@
+name: Reusable Rust + Nix Release
+
+on:
+  workflow_call:
+    inputs:
+      enable-crate-publish:
+        description: 'Publish to crates.io'
+        required: false
+        type: boolean
+        default: false
+      enable-platform-binaries:
+        description: 'Build platform-specific binaries'
+        required: false
+        type: boolean
+        default: true
+      enable-release-reports:
+        description: 'Generate comprehensive quality reports'
+        required: false
+        type: boolean
+        default: true
+      version:
+        description: 'Version to release (auto-detected from tag if not provided)'
+        required: false
+        type: string
+        default: ''
+    secrets:
+      CRATES_TOKEN:
+        description: 'crates.io API token (required if enable-crate-publish is true)'
+        required: false
+      CACHIX_AUTH_TOKEN:
+        description: 'Cachix auth token'
+        required: false
+
+jobs:
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/v}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release version: $VERSION"
+
+      - name: Validate version in Cargo.toml
+        run: |
+          CARGO_VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/.*= "\(.*\)"/\1/')
+          if [ "$CARGO_VERSION" != "${{ steps.version.outputs.version }}" ]; then
+            echo "Error: Version mismatch!"
+            echo "Cargo.toml version: $CARGO_VERSION"
+            echo "Release version: ${{ steps.version.outputs.version }}"
+            exit 1
+          fi
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v12
+
+      - name: Setup Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v8
+
+      - name: Run all validation checks
+        run: nix flake check -L
+
+  generate-reports:
+    name: Generate Release Reports
+    if: inputs.enable-release-reports
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate release reports
+        uses: Singularity-ng/github-actions/generate-release-reports@v1
+        with:
+          version: ${{ needs.validate.outputs.version }}
+
+      - name: Upload reports as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-reports
+          path: |
+            release-artifacts/
+            release-reports-v${{ needs.validate.outputs.version }}.tar.gz
+            release-reports-v${{ needs.validate.outputs.version }}.zip
+
+  build-crate-package:
+    name: Build Crate Package
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build crate package
+        uses: Singularity-ng/github-actions/build-crate-package@v1
+        with:
+          version: ${{ needs.validate.outputs.version }}
+
+      - name: Upload crate package
+        uses: actions/upload-artifact@v4
+        with:
+          name: crate-package
+          path: crate-package/
+
+  publish-crates:
+    name: Publish to crates.io
+    if: inputs.enable-crate-publish
+    needs: [validate, build-crate-package]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Login to crates.io
+        run: cargo login ${{ secrets.CRATES_TOKEN }}
+
+      - name: Publish to crates.io
+        run: cargo publish --all-features
+
+  build-artifacts:
+    name: Build Release Artifacts
+    if: inputs.enable-platform-binaries
+    needs: validate
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: linux-x64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: macos-x64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: macos-arm64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: windows-x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }} --all-features
+
+      - name: Get crate name
+        id: crate-name
+        shell: bash
+        run: |
+          CRATE_NAME=$(grep '^name = ' Cargo.toml | head -1 | sed 's/.*= "\(.*\)"/\1/')
+          echo "name=$CRATE_NAME" >> $GITHUB_OUTPUT
+
+      - name: Package artifact (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../${{ steps.crate-name.outputs.name }}-${{ matrix.artifact_name }}.tar.gz lib*
+
+      - name: Package artifact (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cd target/${{ matrix.target }}/release
+          Compress-Archive -Path *.lib,*.dll -DestinationPath ../../../${{ steps.crate-name.outputs.name }}-${{ matrix.artifact_name }}.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.artifact_name }}
+          path: |
+            *.tar.gz
+            *.zip
+
+  create-release:
+    name: Create GitHub Release
+    needs: [validate, generate-reports, build-crate-package]
+    if: always() && needs.validate.result == 'success' && needs.build-crate-package.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download release reports
+        if: inputs.enable-release-reports
+        uses: actions/download-artifact@v4
+        with:
+          name: release-reports
+
+      - name: Download crate package
+        uses: actions/download-artifact@v4
+        with:
+          name: crate-package
+
+      - name: Download platform binaries
+        if: inputs.enable-platform-binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binary-*
+          merge-multiple: true
+
+      - name: Get crate name
+        id: crate-name
+        run: |
+          CRATE_NAME=$(grep '^name = ' Cargo.toml | head -1 | sed 's/.*= "\(.*\)"/\1/')
+          echo "name=$CRATE_NAME" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: v${{ needs.validate.outputs.version }}
+          tag_name: v${{ needs.validate.outputs.version }}
+          body_path: ${{ inputs.enable-release-reports && 'release-artifacts/RELEASE_SUMMARY.md' || '' }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release-reports-v${{ needs.validate.outputs.version }}.tar.gz
+            release-reports-v${{ needs.validate.outputs.version }}.zip
+            ${{ steps.crate-name.outputs.name }}-${{ needs.validate.outputs.version }}.crate
+            INSTALL.md
+            PACKAGE_CONTENTS.txt
+            release-artifacts/ai-docs/AGENTS.md
+            ${{ steps.crate-name.outputs.name }}-*.tar.gz
+            ${{ steps.crate-name.outputs.name }}-*.zip
+
+  notify:
+    name: Notify Release
+    needs: [validate, create-release]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Send notification
+        run: |
+          if [ "${{ needs.create-release.result }}" = "success" ]; then
+            echo "✅ Successfully released v${{ needs.validate.outputs.version }}"
+            echo "🎉 GitHub Release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ needs.validate.outputs.version }}"
+          else
+            echo "❌ Release failed for v${{ needs.validate.outputs.version }}"
+            exit 1
+          fi

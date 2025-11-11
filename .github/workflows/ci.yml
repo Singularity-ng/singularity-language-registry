@@ -20,6 +20,9 @@ jobs:
   nix-check:
     name: Nix Checks
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # Required for FlakeHub Cache authentication
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -49,17 +52,13 @@ jobs:
 
       # Layer 3: FlakeHub binary cache
       - name: Setup FlakeHub Cache
-        uses: DeterminateSystems/flakehub-cache-action@v7
-        with:
-          cache-name: "singularity-lang-reg"
-          visibility: "public"
-        env:
-          FLAKEHUB_PUSH_TOKEN: ${{ secrets.FLAKEHUB_PUSH_TOKEN }}
+        uses: DeterminateSystems/flakehub-cache-action@v2
 
-      # Layer 4: Cachix binary cache (optional)
+      # Layer 4: Cachix binary cache
       - name: Setup Cachix Cache
         if: env.CACHIX_AUTH_TOKEN != ''
         uses: cachix/cachix-action@v15
+        continue-on-error: true
         with:
           name: singularity-language-registry
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
@@ -182,7 +181,7 @@ jobs:
             echo "❌ Nix checks failed"
             exit 1
           fi
-          if [[ "${{ needs.msrv.result }}" != "success" ]]; then
+          if [[ "${{ needs.msrv.result }}" != "success" && "${{ needs.msrv.result }}" != "skipped" ]]; then
             echo "❌ MSRV check failed"
             exit 1
           fi

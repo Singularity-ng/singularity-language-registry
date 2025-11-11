@@ -8,9 +8,13 @@
     crane = {
       url = "github:ipetkov/crane";
     };
+    advisory-db = {
+      url = "github:rustsec/advisory-db";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, rust-overlay, flake-utils, crane }:
+  outputs = { self, nixpkgs, rust-overlay, flake-utils, crane, advisory-db }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         overlays = [ (import rust-overlay) ];
@@ -40,6 +44,8 @@
           nativeBuildInputs = with pkgs; [
             rustToolchain
             pkg-config
+            clang
+            lld  # Required for Rust linker (-fuse-ld=lld)
           ];
         };
 
@@ -152,10 +158,7 @@
           inherit singularity-language-registry;
 
           # Format check
-          fmt = pkgs.runCommand "fmt-check" {} ''
-            ${rustToolchain}/bin/cargo fmt --manifest-path ${./Cargo.toml} -- --check
-            touch $out
-          '';
+          fmt = craneLib.cargoFmt commonArgs;
 
           # Clippy check with pedantic mode
           clippy = craneLib.cargoClippy (commonArgs // {
@@ -165,6 +168,7 @@
 
           # Audit check
           audit = craneLib.cargoAudit {
+            inherit advisory-db;
             src = ./.;
             inherit (commonArgs) nativeBuildInputs;
           };
@@ -178,7 +182,7 @@
           # Test with all features
           test = craneLib.cargoTest (commonArgs // {
             inherit cargoArtifacts;
-            cargoTestExtraArgs = "--all-features --release";
+            cargoTestExtraArgs = "--all-features";
           });
         };
 

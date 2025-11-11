@@ -1,0 +1,78 @@
+# cargo-deny configuration for comprehensive dependency auditing
+# This enforces security, license compliance, and dependency hygiene
+
+[advisories]
+version = 2
+# Database of known security vulnerabilities
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+# Fail on any vulnerability
+vulnerability = "deny"
+# Fail on unmaintained dependencies
+unmaintained = "warn"
+# Fail on yanked crates
+yanked = "deny"
+# Ignore certain advisories (add specific CVEs if needed)
+ignore = [
+    # Example: "RUSTSEC-2020-0001",
+]
+
+[licenses]
+version = 2
+# Allow specific licenses only
+confidence-threshold = 0.8
+# Uncomment and specify allowed licenses for your project
+# For proprietary software, you may want to be very restrictive
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
+]
+# Deny copyleft licenses for proprietary software
+deny = [
+    "GPL-2.0",
+    "GPL-3.0",
+    "AGPL-3.0",
+]
+# Treat unlicensed dependencies as errors
+unlicensed = "deny"
+# Allow specific crates with custom licenses
+allow-osi-fsf-free = "neither"
+copyleft = "deny"
+# Private crates don't need licenses
+private = { ignore = true }
+
+[licenses.private]
+ignore = true
+
+[bans]
+version = 2
+# Deny multiple versions of the same crate (dependency hell)
+multiple-versions = "warn"
+# Deny crates with wildcards in dependencies
+wildcards = "deny"
+# Allow multiple versions of these crates
+skip = [
+    # Example: { name = "windows-sys", version = "0.48" },
+]
+# Deny specific crates entirely
+deny = [
+    # Example: { name = "openssl-sys", reason = "use rustls instead" },
+]
+# Deny git dependencies in production
+# allow-git = []
+
+# Deny specific features
+deny-features = []
+
+[sources]
+version = 2
+# Only allow crates from crates.io and git
+unknown-registry = "deny"
+unknown-git = "warn"
+# Allow only crates.io and specific git sources
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

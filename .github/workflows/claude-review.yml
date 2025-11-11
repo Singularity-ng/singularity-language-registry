@@ -15,22 +15,6 @@ permissions:
   issues: write
 
 jobs:
-  # Real Claude Code Action - responds to @claude mentions
-  claude-interactive:
-    name: Claude Interactive
-    runs-on: ubuntu-latest
-    if: |
-      (github.event_name == 'issue_comment' &&
-       github.event.issue.pull_request &&
-       contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' &&
-       contains(github.event.comment.body, '@claude'))
-    steps:
-      - uses: anthropics/claude-code-action@v1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY || secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-
   # Automated review + auto-approve on PR open
   claude-review:
     name: Claude Auto Review
@@ -230,7 +214,7 @@ jobs:
           AUTO_APPROVE: ${{ steps.claude-analysis.outputs.AUTO_APPROVE }}
         with:
           script: |
-            const pr_number = ${{ fromJson(steps.pr.outputs.result).number }};
+            const pr_number = context.payload.pull_request.number;
             const auto_approve = process.env.AUTO_APPROVE === 'true';
 
             // Create the review with appropriate status
@@ -251,7 +235,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_NUMBER="${{ fromJson(steps.pr.outputs.result).number }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
 
           # Enable auto-merge with squash strategy
           gh pr merge $PR_NUMBER --auto --squash || echo "Auto-merge may already be enabled or not allowed"

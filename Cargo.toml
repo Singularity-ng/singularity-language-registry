@@ -53,6 +53,10 @@ exclude = [
     "COMPLETE_SUMMARY.md",
     "CRATE_PACKAGING.md",
 
+    # AI documentation (repo version for developers, .release version for users)
+    "AGENTS.md",
+    "AGENTS.md.release",
+
     # IDE
     ".vscode/",
     ".idea/",
@@ -91,3 +95,201 @@ default = []
 validate-metadata = []
 
 [build-dependencies]
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ENTERPRISE-GRADE CLIPPY CONFIGURATION (Ericsson/Safety-Critical Level)
+# ═══════════════════════════════════════════════════════════════════════════
+# Zero tolerance for code quality issues - ALL WARNINGS ARE ERRORS
+# Suitable for: Telecom, embedded systems, safety-critical applications
+# ═══════════════════════════════════════════════════════════════════════════
+
+[lints.rust]
+# Rust compiler lints for maximum safety
+unsafe_code = "deny"
+missing_debug_implementations = "deny"
+missing_copy_implementations = "deny"
+unstable_features = "deny"
+unused_results = "deny"
+variant_size_differences = "deny"
+dead_code = "deny"
+
+# Documentation - public API docs required
+missing_docs = "allow"  # TODO: Add comprehensive public API documentation
+unused_imports = "deny"
+unused_must_use = "deny"
+
+[lints.clippy]
+# ═══════════════════════════════════════════════════════════════════════════
+# CORE LINT GROUPS - ALL ENABLED AS ERRORS
+# ═══════════════════════════════════════════════════════════════════════════
+
+# All pedantic lints (code style and best practices)
+pedantic = { level = "deny", priority = -1 }
+
+# All nursery lints (experimental but valuable)
+nursery = { level = "deny", priority = -1 }
+
+# All cargo lints (dependency and manifest issues)
+cargo = { level = "deny", priority = -1 }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# RESTRICTION LINTS - SAFETY & CORRECTNESS (Ericsson-grade)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Code quality and maintainability
+allow_attributes_without_reason = "deny"
+missing_trait_methods = "deny"
+multiple_inherent_impl = "deny"
+pub_without_shorthand = "deny"
+self_named_module_files = "deny"
+semicolon_inside_block = "deny"
+separated_literal_suffix = "deny"
+unseparated_literal_suffix = "deny"
+
+# Safety and panics
+assertions_on_result_states = "deny"
+exit = "deny"
+expect_used = "deny"
+get_unwrap = "deny"
+indexing_slicing = "deny"
+infinite_loop = "deny"
+panic = "deny"
+panic_in_result_fn = "deny"
+unreachable = "deny"
+unimplemented = "deny"
+unwrap_used = "deny"
+unwrap_in_result = "deny"
+
+# Error handling
+error_impl_error = "deny"
+let_underscore_must_use = "deny"
+map_err_ignore = "deny"
+missing_errors_doc = "deny"
+try_err = "deny"
+
+# Memory and resource management
+clone_on_ref_ptr = "deny"
+empty_drop = "deny"
+large_stack_arrays = "deny"
+large_types_passed_by_value = "deny"
+mem_forget = "deny"
+rc_buffer = "deny"
+rc_mutex = "deny"
+
+# String handling
+str_to_string = "deny"
+string_add = "deny"
+string_lit_chars_any = "deny"
+string_slice = "deny"
+# string_to_string removed - covered by implicit_clone
+
+# Numeric and arithmetic safety
+arithmetic_side_effects = "deny"
+as_conversions = "deny"
+default_numeric_fallback = "deny"
+float_arithmetic = "deny"
+float_cmp_const = "deny"
+integer_division = "deny"
+lossy_float_literal = "deny"
+modulo_arithmetic = "deny"
+
+# Type safety and casting
+as_underscore = "deny"
+fn_to_numeric_cast_any = "deny"
+impl_trait_in_params = "deny"
+let_underscore_untyped = "deny"
+
+# File and I/O operations
+create_dir = "deny"
+filetype_is_file = "deny"
+verbose_file_reads = "deny"
+
+# Development and debugging
+dbg_macro = "deny"
+print_stderr = "deny"
+print_stdout = "deny"
+todo = "deny"
+use_debug = "deny"
+
+# Pattern matching and exhaustiveness
+else_if_without_else = "deny"
+exhaustive_enums = "deny"
+exhaustive_structs = "deny"
+match_bool = "deny"
+match_wild_err_arm = "deny"
+pattern_type_mismatch = "deny"
+rest_pat_in_fully_bound_structs = "deny"
+wildcard_enum_match_arm = "deny"
+
+# Formatting and literals
+decimal_literal_representation = "deny"
+format_push_string = "deny"
+if_then_some_else_none = "deny"
+
+# Misc safety
+deref_by_slicing = "deny"
+empty_enum_variants_with_brackets = "deny"
+empty_structs_with_brackets = "deny"
+host_endian_bytes = "deny"
+implied_bounds_in_impls = "deny"
+little_endian_bytes = "deny"
+min_ident_chars = "allow"  # Short names like 'id', 'f', 'l' are idiomatic
+mixed_read_write_in_expression = "deny"
+mutex_atomic = "deny"
+partial_pub_fields = "deny"
+redundant_type_annotations = "deny"
+ref_patterns = "allow"  # Ref patterns are sometimes clearer
+same_name_method = "deny"
+semicolon_if_nothing_returned = "deny"
+shadow_reuse = "allow"  # Shadowing is idiomatic in Rust
+shadow_same = "allow"  # Shadowing is idiomatic in Rust
+suspicious_xor_used_as_pow = "deny"
+undocumented_unsafe_blocks = "deny"
+unnecessary_safety_comment = "deny"
+unnecessary_safety_doc = "deny"
+unnecessary_self_imports = "deny"
+unneeded_field_pattern = "deny"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PERFORMANCE LINTS
+# ═══════════════════════════════════════════════════════════════════════════
+inefficient_to_string = "deny"
+linkedlist = "deny"
+needless_pass_by_value = "deny"
+unnecessary_box_returns = "deny"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CARGO/DEPENDENCY LINTS
+# ═══════════════════════════════════════════════════════════════════════════
+cargo_common_metadata = "deny"
+negative_feature_names = "deny"
+redundant_feature_names = "deny"
+wildcard_dependencies = "deny"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# REASONABLE EXCEPTIONS (Too noisy for real-world code)
+# ═══════════════════════════════════════════════════════════════════════════
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+wildcard_imports = "allow"
+similar_names = "allow"
+too_many_lines = "allow"  # Handled via clippy.toml threshold
+struct_excessive_bools = "allow"  # Handled via clippy.toml threshold
+single_call_fn = "allow"  # Functions may be separated for organization
+
+# Some lints are allowed globally (test-specific lints have #[allow] attributes in test modules)
+missing_assert_message = "allow"
+
+# Overly strict lints that conflict with idiomatic Rust
+pub_use = "allow"  # Re-exports are a standard Rust pattern for clean APIs
+missing_inline_in_public_items = "allow"  # Compiler inlines intelligently; manual annotations are noisy
+
+# Test-specific lint allowances
+# Tests are expected to panic (assert!) and shadow variables for clarity
+[lints.clippy.missing_panics_doc]
+level = "allow"
+priority = 1
+
+[lints.clippy.shadow_unrelated]
+level = "allow"
+priority = 1

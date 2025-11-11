@@ -113,8 +113,8 @@ pub fn is_detectable(file_path: &Path, content: Option<&str>) -> bool {
     }
 
     // Check content if provided
-    if let Some(content) = content {
-        if detect_from_content(content).is_some() {
+    if let Some(file_content) = content {
+        if detect_from_content(file_content).is_some() {
             return true;
         }
     }

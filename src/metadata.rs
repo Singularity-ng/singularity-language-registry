@@ -7,6 +7,7 @@ use crate::registry::LANGUAGE_REGISTRY;
 
 /// Metadata source for language capabilities
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct MetadataSource {
     pub tree_sitter_languages: Vec<String>,
     pub rca_languages: Vec<String>,
@@ -15,13 +16,20 @@ pub struct MetadataSource {
 
 /// Validation result for metadata consistency
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct MetadataValidation {
     pub registry_only: Vec<String>,
     pub missing_from_registry: Vec<String>,
     pub capability_mismatches: Vec<CapabilityMismatch>,
 }
 
+/// Capability mismatch between registry and actual library support
 #[derive(Debug)]
+#[non_exhaustive]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "Two bools are needed to represent registry vs actual state"
+)]
 pub struct CapabilityMismatch {
     pub language: String,
     pub capability: String,
@@ -32,6 +40,10 @@ pub struct CapabilityMismatch {
 /// Validate registry metadata against actual library support
 ///
 /// This should be run in tests or build scripts to ensure consistency
+#[allow(
+    clippy::too_many_lines,
+    reason = "Validation logic needs to check multiple capabilities comprehensively"
+)]
 pub fn validate_metadata(source: &MetadataSource) -> MetadataValidation {
     let registry_only = Vec::new();
     let mut missing_from_registry = Vec::new();
@@ -43,7 +55,7 @@ pub fn validate_metadata(source: &MetadataSource) -> MetadataValidation {
             if !lang.rca_supported {
                 capability_mismatches.push(CapabilityMismatch {
                     language: lang_id.clone(),
-                    capability: "RCA".to_string(),
+                    capability: "RCA".to_owned(),
                     registry_says: false,
                     actual: true,
                 });
@@ -59,7 +71,7 @@ pub fn validate_metadata(source: &MetadataSource) -> MetadataValidation {
             if !lang.ast_grep_supported {
                 capability_mismatches.push(CapabilityMismatch {
                     language: lang_id.clone(),
-                    capability: "AST-Grep".to_string(),
+                    capability: "AST-Grep".to_owned(),
                     registry_says: false,
                     actual: true,
                 });
@@ -74,7 +86,7 @@ pub fn validate_metadata(source: &MetadataSource) -> MetadataValidation {
         if lang.rca_supported && !source.rca_languages.contains(&lang.id) {
             capability_mismatches.push(CapabilityMismatch {
                 language: lang.id.clone(),
-                capability: "RCA".to_string(),
+                capability: "RCA".to_owned(),
                 registry_says: true,
                 actual: false,
             });
@@ -83,7 +95,7 @@ pub fn validate_metadata(source: &MetadataSource) -> MetadataValidation {
         if lang.ast_grep_supported && !source.ast_grep_languages.contains(&lang.id) {
             capability_mismatches.push(CapabilityMismatch {
                 language: lang.id.clone(),
-                capability: "AST-Grep".to_string(),
+                capability: "AST-Grep".to_owned(),
                 registry_says: true,
                 actual: false,
             });
@@ -98,6 +110,10 @@ pub fn validate_metadata(source: &MetadataSource) -> MetadataValidation {
 }
 
 /// Generate metadata report for documentation
+#[allow(
+    clippy::let_underscore_must_use,
+    reason = "Writing to String via write! is infallible - cannot fail in practice"
+)]
 pub fn generate_metadata_report() -> String {
     use std::fmt::Write;
 
@@ -158,42 +174,42 @@ pub fn get_known_support() -> MetadataSource {
     MetadataSource {
         // RCA supported languages (from rust-code-analysis)
         rca_languages: vec![
-            "rust".to_string(),
-            "c".to_string(),
-            "cpp".to_string(),
-            "go".to_string(),
-            "java".to_string(),
-            "python".to_string(),
-            "javascript".to_string(),
-            "typescript".to_string(),
-            "csharp".to_string(),
-            "kotlin".to_string(),
-            "lua".to_string(),
+            "rust".to_owned(),
+            "c".to_owned(),
+            "cpp".to_owned(),
+            "go".to_owned(),
+            "java".to_owned(),
+            "python".to_owned(),
+            "javascript".to_owned(),
+            "typescript".to_owned(),
+            "csharp".to_owned(),
+            "kotlin".to_owned(),
+            "lua".to_owned(),
         ],
 
         // AST-Grep supported languages
         ast_grep_languages: vec![
-            "rust".to_string(),
-            "python".to_string(),
-            "javascript".to_string(),
-            "typescript".to_string(),
-            "go".to_string(),
-            "java".to_string(),
-            "c".to_string(),
-            "cpp".to_string(),
-            "csharp".to_string(),
-            "kotlin".to_string(),
-            "elixir".to_string(),
-            "erlang".to_string(),
-            "gleam".to_string(),
-            "bash".to_string(),
-            "lua".to_string(),
-            "sql".to_string(),
-            "yaml".to_string(),
-            "json".to_string(),
-            "toml".to_string(),
-            "dockerfile".to_string(),
-            "markdown".to_string(),
+            "rust".to_owned(),
+            "python".to_owned(),
+            "javascript".to_owned(),
+            "typescript".to_owned(),
+            "go".to_owned(),
+            "java".to_owned(),
+            "c".to_owned(),
+            "cpp".to_owned(),
+            "csharp".to_owned(),
+            "kotlin".to_owned(),
+            "elixir".to_owned(),
+            "erlang".to_owned(),
+            "gleam".to_owned(),
+            "bash".to_owned(),
+            "lua".to_owned(),
+            "sql".to_owned(),
+            "yaml".to_owned(),
+            "json".to_owned(),
+            "toml".to_owned(),
+            "dockerfile".to_owned(),
+            "markdown".to_owned(),
         ],
 
         // Tree-sitter has parsers for all our languages
@@ -230,6 +246,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::missing_panics_doc,
+        reason = "Test function - panics are expected via assert!"
+    )]
     fn test_report_generation() {
         let report = generate_metadata_report();
         assert!(report.contains("Language Registry Metadata Report"));
