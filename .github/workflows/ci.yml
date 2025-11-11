@@ -49,9 +49,9 @@ jobs:
 
       # Layer 3: FlakeHub binary cache
       - name: Setup FlakeHub Cache
-        uses: DeterminateSystems/flakehub-cache-action@v7
+        uses: DeterminateSystems/flakehub-push@v4
         with:
-          cache-name: "singularity-lang-reg"
+          name: "singularity-lang-reg"
           visibility: "public"
         env:
           FLAKEHUB_PUSH_TOKEN: ${{ secrets.FLAKEHUB_PUSH_TOKEN }}
