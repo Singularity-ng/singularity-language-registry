@@ -45,6 +45,7 @@
             rustToolchain
             pkg-config
             clang
+            lld  # Required for Rust linker (-fuse-ld=lld)
           ];
         };
 
