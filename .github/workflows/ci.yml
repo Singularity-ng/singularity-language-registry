@@ -47,14 +47,14 @@ jobs:
         with:
           upstream-cache: "https://cache.nixos.org"
 
-      # Layer 3: FlakeHub binary cache
-      - name: Setup FlakeHub Cache
-        uses: DeterminateSystems/flakehub-push@v4
-        with:
-          name: "Singularity-ng/singularity-language-registry"
-          visibility: "public"
-        env:
-          FLAKEHUB_PUSH_TOKEN: ${{ secrets.FLAKEHUB_PUSH_TOKEN }}
+      # Layer 3: FlakeHub binary cache (disabled - requires additional permissions)
+      # - name: Setup FlakeHub Cache
+      #   uses: DeterminateSystems/flakehub-push@v4
+      #   with:
+      #     name: "Singularity-ng/singularity-language-registry"
+      #     visibility: "public"
+      #   env:
+      #     FLAKEHUB_PUSH_TOKEN: ${{ secrets.FLAKEHUB_PUSH_TOKEN }}
 
       # Layer 4: Cachix binary cache (optional)
       - name: Setup Cachix Cache
