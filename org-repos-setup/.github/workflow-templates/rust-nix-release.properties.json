@@ -1,7 +1,0 @@
-{
-  "name": "Rust + Nix Release",
-  "description": "Automated release workflow with quality reports, crate packaging, and GitHub Release creation",
-  "iconName": "rocket",
-  "categories": ["Rust", "Nix", "Release", "Deployment"],
-  "filePatterns": ["Cargo.toml$", "flake.nix$"]
-}

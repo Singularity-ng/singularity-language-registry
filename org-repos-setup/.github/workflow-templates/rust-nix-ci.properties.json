@@ -1,7 +1,0 @@
-{
-  "name": "Rust + Nix CI",
-  "description": "Standard CI pipeline for Rust projects using Nix flake with comprehensive checks and caching",
-  "iconName": "rust",
-  "categories": ["Rust", "Nix", "CI"],
-  "filePatterns": ["Cargo.toml$", "flake.nix$"]
-}

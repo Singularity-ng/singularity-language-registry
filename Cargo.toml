@@ -31,12 +31,22 @@ exclude = [
     "justfile",
     "setup-hooks.sh",
     ".git-hooks/",
+    ".githooks/",
+    ".gitignore",
+    ".gitmessage",
+    "renovate.json5",
+    "clippy.toml",
+    "deny.toml",
+    "build.rs",
 
     # Build artifacts
     "release-reports/",
     "target/",
     "*.profraw",
     "*.profdata",
+
+    # Organization/template setup files
+    "org-repos-setup/",
 
     # Documentation (internal/setup guides - not for end users)
     "DOCS_SETUP.md",
@@ -52,6 +62,15 @@ exclude = [
     "RELEASE_REPORTS_SUMMARY.md",
     "COMPLETE_SUMMARY.md",
     "CRATE_PACKAGING.md",
+    "CI_OPTIMIZATION.md",
+    "CLAUDE_AUTO_APPROVE_SETUP.md",
+    "CLAUDE_INTEGRATION.md",
+    "GITHUB_RELEASE_STRUCTURE.md",
+    "ORG_GITHUB_ACTIONS_SETUP.md",
+    "RELEASE_PROCESS.md",
+    "TEST_AUTO_APPROVE.md",
+    "WORKFLOW_GUIDE.md",
+    "CHANGELOG.md",
 
     # AI documentation (repo version for developers, .release version for users)
     "AGENTS.md",
