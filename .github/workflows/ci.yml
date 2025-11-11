@@ -111,13 +111,6 @@ jobs:
         run: |
           nix develop --command cargo tarpaulin --out xml --all-features --verbose
 
-      - name: Upload Coverage
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./cobertura.xml
-          fail_ci_if_error: false
-        continue-on-error: true
-
   # MSRV check (use specific Rust version, can't do this easily in Nix)
   # Only run on main branch pushes, scheduled runs, and manual triggers - not every PR
   msrv:
