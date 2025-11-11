@@ -181,7 +181,7 @@ jobs:
             echo "❌ Nix checks failed"
             exit 1
           fi
-          if [[ "${{ needs.msrv.result }}" != "success" ]]; then
+          if [[ "${{ needs.msrv.result }}" != "success" && "${{ needs.msrv.result }}" != "skipped" ]]; then
             echo "❌ MSRV check failed"
             exit 1
           fi
