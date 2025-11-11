@@ -223,12 +223,13 @@ jobs:
           echo "## 📦 Included Reports" >> RELEASE_SUMMARY.md
           echo "" >> RELEASE_SUMMARY.md
           echo "1. **CHANGELOG.md** - Complete project history" >> RELEASE_SUMMARY.md
-          echo "2. **clippy-report.md** - Zero warnings validation" >> RELEASE_SUMMARY.md
-          echo "3. **security-audit.md** - Vulnerability scan results" >> RELEASE_SUMMARY.md
-          echo "4. **sbom.md** - Complete dependency list with licenses" >> RELEASE_SUMMARY.md
-          echo "5. **coverage-report.md** - Test coverage statistics" >> RELEASE_SUMMARY.md
-          echo "6. **build-info.md** - Build environment details" >> RELEASE_SUMMARY.md
-          echo "7. **dependency-report.md** - Dependency status" >> RELEASE_SUMMARY.md
+          echo "2. **AGENTS.md** - AI/LLM-optimized usage documentation" >> RELEASE_SUMMARY.md
+          echo "3. **clippy-report.md** - Zero warnings validation" >> RELEASE_SUMMARY.md
+          echo "4. **security-audit.md** - Vulnerability scan results" >> RELEASE_SUMMARY.md
+          echo "5. **sbom.md** - Complete dependency list with licenses" >> RELEASE_SUMMARY.md
+          echo "6. **coverage-report.md** - Test coverage statistics" >> RELEASE_SUMMARY.md
+          echo "7. **build-info.md** - Build environment details" >> RELEASE_SUMMARY.md
+          echo "8. **dependency-report.md** - Dependency status" >> RELEASE_SUMMARY.md
           echo "" >> RELEASE_SUMMARY.md
           echo "## 🚀 Installation" >> RELEASE_SUMMARY.md
           echo "" >> RELEASE_SUMMARY.md
@@ -250,13 +251,17 @@ jobs:
           echo "Proprietary software. All rights reserved." >> RELEASE_SUMMARY.md
           echo "See LICENSE file for details." >> RELEASE_SUMMARY.md
 
+      - name: Prepare user-focused AGENTS.md
+        run: |
+          cp AGENTS.md.release AGENTS_USER.md
+
       - name: Organize reports into subdirectory
         run: |
           mkdir -p release-artifacts/reports
           mkdir -p release-artifacts/ai-docs
           mv CHANGELOG.md release-artifacts/
           mv RELEASE_SUMMARY.md release-artifacts/
-          cp AGENTS.md release-artifacts/ai-docs/
+          mv AGENTS_USER.md release-artifacts/ai-docs/AGENTS.md
           mv clippy-report.md release-artifacts/reports/
           mv security-audit.md release-artifacts/reports/
           mv sbom.md release-artifacts/reports/
@@ -483,6 +488,7 @@ jobs:
             echo "🎉 GitHub Release: https://github.com/Singularity-ng/singularity-language-registry/releases/tag/v${{ needs.validate.outputs.version }}"
             echo "📊 Release includes:"
             echo "   - Comprehensive quality reports (SBOM, security audit, etc.)"
+            echo "   - AI/LLM-optimized documentation (AGENTS.md)"
             echo "   - Crate package (.crate file for installation)"
             echo "   - Installation instructions (INSTALL.md)"
             echo "   - Package contents list (PACKAGE_CONTENTS.txt)"

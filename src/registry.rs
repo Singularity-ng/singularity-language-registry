@@ -661,6 +661,7 @@ pub fn get_language_by_mime_type(mime_type: &str) -> Option<&'static LanguageInf
 #[allow(
     clippy::unwrap_used,
     clippy::indexing_slicing,
+    clippy::missing_panics_doc,
     reason = "Tests are allowed to panic on unexpected conditions for clearer test failures"
 )]
 mod tests {

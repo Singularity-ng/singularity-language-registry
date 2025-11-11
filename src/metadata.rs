@@ -26,6 +26,10 @@ pub struct MetadataValidation {
 /// Capability mismatch between registry and actual library support
 #[derive(Debug)]
 #[non_exhaustive]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "Two bools are needed to represent registry vs actual state"
+)]
 pub struct CapabilityMismatch {
     pub language: String,
     pub capability: String,
@@ -36,6 +40,10 @@ pub struct CapabilityMismatch {
 /// Validate registry metadata against actual library support
 ///
 /// This should be run in tests or build scripts to ensure consistency
+#[allow(
+    clippy::too_many_lines,
+    reason = "Validation logic needs to check multiple capabilities comprehensively"
+)]
 pub fn validate_metadata(source: &MetadataSource) -> MetadataValidation {
     let registry_only = Vec::new();
     let mut missing_from_registry = Vec::new();
@@ -238,6 +246,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::missing_panics_doc,
+        reason = "Test function - panics are expected via assert!"
+    )]
     fn test_report_generation() {
         let report = generate_metadata_report();
         assert!(report.contains("Language Registry Metadata Report"));

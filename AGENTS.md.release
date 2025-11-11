@@ -1,0 +1,98 @@
+# Using Singularity Language Registry - AI Agent Documentation
+
+> **For LLMs:** This is the USER documentation for using this library. For development/contribution info, see the repository AGENTS.md.
+
+---
+
+## Quick Start
+
+This is a Rust library for language detection and metadata. Install it and consult the rustdoc for complete API documentation.
+
+---
+
+## Installation
+
+### Option 1: Via Git Tag (Recommended)
+
+```toml
+[dependencies]
+singularity-language-registry = { git = "https://github.com/Singularity-ng/singularity-language-registry", tag = "v0.1.0" }
+```
+
+### Option 2: From .crate File
+
+```bash
+cargo install --path singularity-language-registry-0.1.0.crate
+```
+
+### Option 3: Local Path Dependency
+
+```toml
+[dependencies]
+singularity-language-registry = { path = "./path/to/singularity-language-registry" }
+```
+
+---
+
+## Basic Usage
+
+```rust
+use singularity_language_registry::detect_language;
+use std::path::Path;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let path = Path::new("example.rs");
+    let lang = detect_language(path)?;
+    println!("Language: {}", lang.name);  // "Rust"
+    Ok(())
+}
+```
+
+---
+
+## Complete API Documentation
+
+For full API documentation including all functions, data structures, and examples, run:
+
+```bash
+cargo doc --open
+```
+
+Or view online at the documentation link in the repository.
+
+---
+
+## Supported Languages
+
+- **BEAM Family:** Elixir, Erlang, Gleam
+- **Systems Family:** Rust, C, C++, Go
+- **Web Family:** JavaScript, TypeScript, Python
+- **Enterprise Family:** Java, Kotlin, C#
+- **Scripting Family:** Bash, Lua
+- **Data Family:** JSON, YAML, TOML, SQL
+- **Others:** Markdown, Dockerfile, Makefile
+
+**Total: 18+ languages**
+
+---
+
+## Key Features
+
+- Fast lookups (O(1) HashMap-based detection)
+- Zero dependencies on other Singularity crates
+- Comprehensive metadata (extensions, MIME types, families)
+- RCA and AST-Grep support tracking
+- Thread-safe static data
+- Serializable with serde
+
+---
+
+## License
+
+**Proprietary Software - All Rights Reserved**
+
+This software requires a valid license agreement. Contact Singularity Team for licensing.
+
+---
+
+**For detailed API reference, code examples, and advanced usage patterns, see the rustdoc documentation.**

@@ -8,7 +8,7 @@ pub fn languages_by_families() -> HashMap<String, Vec<&'static LanguageInfo>> {
     let mut families: HashMap<String, Vec<&'static LanguageInfo>> = HashMap::new();
 
     for lang in LANGUAGE_REGISTRY.supported_languages() {
-        if let Some(family) = &lang.family {
+        if let Some(ref family) = lang.family {
             families.entry(family.clone()).or_default().push(lang);
         } else {
             families.entry("Other".to_owned()).or_default().push(lang);
@@ -20,6 +20,7 @@ pub fn languages_by_families() -> HashMap<String, Vec<&'static LanguageInfo>> {
 
 /// Get language statistics
 #[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
 pub struct LanguageStats {
     pub total_languages: usize,
     pub rca_supported: usize,
@@ -55,7 +56,7 @@ pub fn same_family(lang1: &str, lang2: &str) -> bool {
         return false;
     };
 
-    match (&l1.family, &l2.family) {
+    match (l1.family.as_ref(), l2.family.as_ref()) {
         (Some(f1), Some(f2)) => f1 == f2,
         _ => false,
     }
@@ -97,6 +98,7 @@ pub fn file_patterns(language: &str) -> Vec<&'static str> {
 
 /// Check if a language supports a specific analysis feature
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AnalysisFeature {
     RCA,
     ASTGrep,

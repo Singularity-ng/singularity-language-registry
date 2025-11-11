@@ -5,6 +5,7 @@
 #![allow(
     clippy::print_stdout,
     clippy::use_debug,
+    clippy::too_many_lines,
     reason = "Examples are meant to demonstrate usage and print output to the user"
 )]
 
@@ -16,6 +17,10 @@ use singularity_language_registry::{
 };
 use std::path::Path;
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "Example code demonstrating various features"
+)]
 fn main() {
     println!("=== Singularity Language Registry Examples ===\n");
 

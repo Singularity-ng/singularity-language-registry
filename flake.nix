@@ -8,9 +8,13 @@
     crane = {
       url = "github:ipetkov/crane";
     };
+    advisory-db = {
+      url = "github:rustsec/advisory-db";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, rust-overlay, flake-utils, crane }:
+  outputs = { self, nixpkgs, rust-overlay, flake-utils, crane, advisory-db }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         overlays = [ (import rust-overlay) ];
@@ -165,6 +169,7 @@
 
           # Audit check
           audit = craneLib.cargoAudit {
+            inherit advisory-db;
             src = ./.;
             inherit (commonArgs) nativeBuildInputs;
           };
