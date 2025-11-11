@@ -8,6 +8,13 @@ on:
   schedule:
     # Run at 00:00 UTC every Sunday to catch dependency issues
     - cron: '0 0 * * 0'
+  workflow_dispatch:
+    inputs:
+      run_all_jobs:
+        description: 'Run all jobs (including coverage, MSRV, benchmarks)'
+        required: false
+        default: 'true'
+        type: boolean
 
 # Cancel in-progress runs on the same branch
 concurrency:
@@ -60,7 +67,7 @@ jobs:
         uses: cachix/cachix-action@v15
         continue-on-error: true
         with:
-          name: singularity-language-registry
+          name: mikkihugo
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
         env:
           CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
@@ -81,16 +88,16 @@ jobs:
       - name: Push to Cachix
         if: success() && github.ref == 'refs/heads/main' && env.CACHIX_AUTH_TOKEN != ''
         run: |
-          nix build --json | jq -r '.[].outputs | to_entries[].value' | cachix push singularity-language-registry
+          nix build --json | jq -r '.[].outputs | to_entries[].value' | cachix push mikkihugo
         env:
           CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
   # Code coverage (runs separately since tarpaulin is slow)
-  # Make optional for PRs - only required on main
+  # Make optional for PRs - only required on main or manual runs
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.run_all_jobs)
     steps:
       - uses: actions/checkout@v4
 
@@ -112,11 +119,11 @@ jobs:
         continue-on-error: true
 
   # MSRV check (use specific Rust version, can't do this easily in Nix)
-  # Only run on main branch pushes and scheduled runs, not every PR
+  # Only run on main branch pushes, scheduled runs, and manual triggers - not every PR
   msrv:
     name: MSRV (1.91.0)
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_all_jobs)
     steps:
       - uses: actions/checkout@v4
 
@@ -133,11 +140,11 @@ jobs:
           cargo build --all-features
           cargo test --all-features
 
-  # Dependency audit (informational - runs on schedule)
+  # Dependency audit (informational - runs on schedule or manual triggers)
   audit-deps:
     name: Dependency Audit
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_all_jobs)
     steps:
       - uses: actions/checkout@v4
 
@@ -149,11 +156,11 @@ jobs:
           nix develop --command cargo outdated --exit-code 1
         continue-on-error: true
 
-  # Benchmarks (runs only on main branch)
+  # Benchmarks (runs only on main branch or manual triggers)
   benchmarks:
     name: Benchmarks
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.run_all_jobs)
     steps:
       - uses: actions/checkout@v4
 
