@@ -85,20 +85,29 @@ jobs:
           echo "" >> scope_check.md
 
           # Check for out-of-scope changes
-          echo "### Scope Check (Language Registry)" >> scope_check.md
-          echo "This repo is for language detection/registry. Checking relevance..." >> scope_check.md
+          echo "### Scope Check" >> scope_check.md
+          echo "Checking file relevance (blocks binaries, temp files, etc.)..." >> scope_check.md
           echo "" >> scope_check.md
 
           # Define in-scope patterns
+          # .github/ is ALWAYS relevant (workflows, actions, templates)
           RELEVANT_PATTERNS=(
             "src/"           # Source code
             "Cargo.toml"     # Dependencies
             "tests/"         # Tests
-            ".github/"       # CI/workflows
+            ".github/"       # GitHub Actions, workflows, templates - ALWAYS relevant!
+            ".githooks/"     # Git hooks
             "flake.nix"      # Nix setup
+            "flake.lock"     # Nix dependencies
             "README.md"      # Documentation
             "LICENSE"        # License
-            "*.md"           # Documentation
+            "CONTRIBUTING.md" # Contribution guide
+            "*.md"           # Documentation files
+            "build.rs"       # Build scripts
+            "examples/"      # Example code
+            "justfile"       # Just commands
+            ".envrc"         # Direnv setup
+            "renovate.json5" # Dependency automation
           )
 
           # Check each changed file
@@ -132,9 +141,16 @@ jobs:
           done
 
           if [ ${#OUT_OF_SCOPE_FILES[@]} -eq 0 ]; then
-            echo "✅ All changes appear relevant to language registry" >> scope_check.md
+            echo "✅ All changes appear relevant (includes .github/ workflows, src/, docs, config)" >> scope_check.md
           fi
           echo "" >> scope_check.md
+
+          # Special note about .github/
+          GITHUB_FILES=$(echo "$CHANGED_FILES" | tr ' ' '\n' | grep -c "^.github/" || true)
+          if [ "$GITHUB_FILES" -gt 0 ]; then
+            echo "ℹ️ **Note**: $GITHUB_FILES .github/ file(s) changed - workflows/actions are critical infrastructure" >> scope_check.md
+            echo "" >> scope_check.md
+          fi
 
           # Save scope issues count
           echo "SCOPE_ISSUES=$SCOPE_ISSUES" >> $GITHUB_OUTPUT
