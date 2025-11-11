@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, development ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, development ]
   schedule:
     # Run at 00:00 UTC every Sunday to catch dependency issues
     - cron: '0 0 * * 0'
@@ -13,6 +13,10 @@ env:
   RUST_BACKTRACE: 1
   RUSTFLAGS: -D warnings
   CARGO_TERM_COLOR: always
+  # Enable Rust compilation caching
+  CARGO_INCREMENTAL: 1
+  RUSTC_WRAPPER: sccache
+  SCCACHE_GHA_ENABLED: "true"
 
 jobs:
   test:
@@ -32,23 +36,16 @@ jobs:
           toolchain: ${{ matrix.rust }}
           components: rustfmt, clippy
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      # Use Rust cache action which combines cargo + sccache
+      - name: Setup Rust Cache (with sccache)
+        uses: Swatinem/rust-cache@v2
         with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          cache-all-crates: true
+          cache-on-failure: true
 
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache target directory
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-target-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+      # Setup sccache for faster compilation
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.6
 
       - name: Build
         run: cargo build --all-targets --all-features
@@ -189,3 +186,72 @@ jobs:
       - name: Run benchmarks
         run: cargo bench --no-fail-fast || true
         continue-on-error: true
+
+  # Nix build with FlakeHub + Cachix + GitHub caching (all three layers)
+  nix-build:
+    name: Nix Build (Multi-Cache)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      # Layer 1: GitHub Actions cache for Nix store
+      - name: Cache Nix Store
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nix-profile
+            ~/.nix-defexpr
+            ~/.nix-channels
+            /nix/store
+            /nix/var/nix
+          key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-keys: |
+            nix-${{ runner.os }}-
+
+      # Install Nix package manager
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v12
+
+      # Layer 2: Magic Nix Cache (GitHub Actions backend)
+      - name: Setup Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v8
+        with:
+          upstream-cache: "https://cache.nixos.org"
+
+      # Layer 3: FlakeHub binary cache
+      - name: Setup FlakeHub Cache
+        uses: DeterminateSystems/flakehub-cache-action@v7
+        with:
+          cache-name: "singularity-lang-reg"
+          visibility: "public"
+
+      # Layer 4: Cachix binary cache (optional - requires secret)
+      - name: Setup Cachix Cache
+        if: env.CACHIX_AUTH_TOKEN != ''
+        uses: cachix/cachix-action@v15
+        with:
+          name: singularity-language-registry
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        env:
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      # Build with Nix using all cache layers
+      - name: Nix Build
+        run: |
+          # Run all flake checks (formatting, tests, clippy, etc.)
+          nix flake check -L
+
+          # Build the package
+          nix build -L
+
+      # Push to Cachix if on main branch
+      - name: Push to Cachix
+        if: success() && github.ref == 'refs/heads/main' && env.CACHIX_AUTH_TOKEN != ''
+        run: |
+          nix build --json | jq -r '.[].outputs | to_entries[].value' | cachix push singularity-language-registry
+        env:
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}

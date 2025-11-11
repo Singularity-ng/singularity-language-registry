@@ -34,6 +34,37 @@ language_registry (independent)
 - **Pattern signatures** - language syntax (NOT libraries) for cross-language detection
 - **Serializable** - all language info can be exported as JSON
 
+## Installation
+
+### Using Cargo
+
+```bash
+cargo add singularity-language-registry
+```
+
+### Using Nix
+
+```bash
+# Add to your flake.nix inputs
+inputs.singularity-language-registry.url = "github:Singularity-ng/singularity-language-registry";
+
+# Or use directly with Nix
+nix build github:Singularity-ng/singularity-language-registry
+
+# Enter development shell
+nix develop github:Singularity-ng/singularity-language-registry
+```
+
+### With FlakeHub (Fastest - Binary Cache)
+
+```bash
+# FlakeHub provides pre-built binaries for faster installation
+nix build "https://flakehub.com/f/Singularity-ng/singularity-language-registry/*.tar.gz"
+
+# Or add to your flake.nix
+inputs.singularity-language-registry.url = "https://flakehub.com/f/Singularity-ng/singularity-language-registry/0.1.*.tar.gz";
+```
+
 ## Usage
 
 ### Basic Language Detection
