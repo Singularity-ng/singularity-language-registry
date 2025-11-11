@@ -450,6 +450,18 @@ jobs:
           cd target/${{ matrix.target }}/release
           Compress-Archive -Path *singularity_language_registry* -DestinationPath ../../../${{ matrix.artifact_name }}.zip
 
+      - name: Generate artifact attestation (Unix)
+        if: runner.os != 'Windows'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ matrix.artifact_name }}.tar.gz
+
+      - name: Generate artifact attestation (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ matrix.artifact_name }}.zip
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -466,6 +478,13 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
 
+      - name: Generate SHA256 checksums for binaries
+        run: |
+          find . -name "*.tar.gz" -o -name "*.zip" | while read file; do
+            sha256sum "$file" >> BINARY_SHA256SUMS
+          done
+          cat BINARY_SHA256SUMS || echo "No binary artifacts found"
+
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -473,6 +492,7 @@ jobs:
           files: |
             **/*.tar.gz
             **/*.zip
+            BINARY_SHA256SUMS
 
   notify:
     name: Notify Release
