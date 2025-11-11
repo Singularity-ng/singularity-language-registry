@@ -14,17 +14,17 @@ This is the most secure approach - it limits permissions to only what's needed f
 
 ### Steps:
 
-1. **Navigate to Organization Settings**
-   - Go to: https://github.com/organizations/Singularity-ng/settings/personal-access-tokens/new
-   - Or: GitHub → Your Organizations → Singularity-ng → Settings → Developer settings → Personal access tokens → Fine-grained tokens
+1. **Navigate to Personal Access Token Settings**
+   - Go to: https://github.com/settings/personal-access-tokens/new
+   - Or: GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token
 
-2. **Create New Fine-Grained PAT**
+2. **Configure Token Details**
    - Token name: `Claude Auto-Approve for singularity-language-registry`
    - Expiration: Choose appropriate duration (90 days recommended, with calendar reminder to renew)
    - Description: `Allows Claude AI workflow to approve PRs in singularity-language-registry`
-   - Resource owner: `Singularity-ng`
+   - Resource owner: Select `Singularity-ng` (the organization)
 
-3. **Repository Access**
+3. **Set Repository Access**
    - Select: "Only select repositories"
    - Choose: `singularity-language-registry`
 
@@ -97,9 +97,9 @@ You can verify the secret is set by checking:
 ## Token Rotation Schedule
 
 It's recommended to rotate the token every 90 days:
-1. Create new PAT with same permissions
+1. Create new PAT with same permissions (following steps above)
 2. Update `ORG_GITHUB_TOKEN` secret with new value
-3. Delete old PAT from organization settings
+3. Delete old PAT from your personal settings (https://github.com/settings/personal-access-tokens)
 4. Set calendar reminder for next rotation
 
 ## Additional Resources
