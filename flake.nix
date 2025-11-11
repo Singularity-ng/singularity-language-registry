@@ -182,7 +182,7 @@
           # Test with all features
           test = craneLib.cargoTest (commonArgs // {
             inherit cargoArtifacts;
-            cargoTestExtraArgs = "--all-features --release";
+            cargoTestExtraArgs = "--all-features";
           });
         };
 
