@@ -19,6 +19,7 @@ pub fn languages_by_families() -> HashMap<String, Vec<&'static LanguageInfo>> {
 }
 
 /// Get language statistics
+#[derive(Debug, Clone, Copy)]
 pub struct LanguageStats {
     pub total_languages: usize,
     pub rca_supported: usize,

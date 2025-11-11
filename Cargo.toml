@@ -106,13 +106,15 @@ validate-metadata = []
 [lints.rust]
 # Rust compiler lints for maximum safety
 unsafe_code = "deny"
-missing_docs = "deny"
 missing_debug_implementations = "deny"
 missing_copy_implementations = "deny"
 unstable_features = "deny"
 unused_results = "deny"
 variant_size_differences = "deny"
 dead_code = "deny"
+
+# Documentation - public API docs required
+missing_docs = "allow"  # TODO: Add comprehensive public API documentation
 unused_imports = "deny"
 unused_must_use = "deny"
 
@@ -136,7 +138,6 @@ cargo = { level = "deny", priority = -1 }
 
 # Code quality and maintainability
 allow_attributes_without_reason = "deny"
-missing_docs_in_private_items = "deny"
 missing_inline_in_public_items = "deny"
 missing_trait_methods = "deny"
 multiple_inherent_impl = "deny"
@@ -279,10 +280,6 @@ similar_names = "allow"
 too_many_lines = "allow"  # Handled via clippy.toml threshold
 struct_excessive_bools = "allow"  # Handled via clippy.toml threshold
 single_call_fn = "allow"  # Functions may be separated for organization
-
-# Documentation lints (separate task to add comprehensive docs)
-missing_docs = "allow"
-missing_docs_in_private_items = "allow"
 
 # Some lints are allowed globally (test-specific lints have #[allow] attributes in test modules)
 missing_assert_message = "allow"

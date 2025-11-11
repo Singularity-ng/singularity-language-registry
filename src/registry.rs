@@ -77,6 +77,7 @@ pub struct LanguageInfo {
 }
 
 /// Central language registry with optimized lookups
+#[derive(Debug)]
 pub struct LanguageRegistry {
     /// Primary language storage by ID
     languages: HashMap<String, LanguageInfo>,
@@ -105,7 +106,10 @@ impl LanguageRegistry {
     }
 
     /// Register all supported languages
-    #[allow(clippy::too_many_lines)]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Language registration data is necessarily large; splitting would reduce readability"
+    )]
     fn register_all_languages(&mut self) {
         // BEAM Languages
         self.register_language(LanguageInfo {
@@ -473,22 +477,22 @@ impl LanguageRegistry {
     fn register_language(&mut self, language: LanguageInfo) {
         let id = language.id.clone();
 
-        // Store the language
-        self.languages.insert(id.clone(), language);
+        // Store the language (we don't care about previous value, if any)
+        let _prev = self.languages.insert(id.clone(), language);
 
         // Build extension map
         for ext in &self.languages[&id].extensions {
-            self.extension_map.insert(ext.clone(), id.clone());
+            let _prev = self.extension_map.insert(ext.clone(), id.clone());
         }
 
         // Build alias map
         for alias in &self.languages[&id].aliases {
-            self.alias_map.insert(alias.clone(), id.clone());
+            let _prev = self.alias_map.insert(alias.clone(), id.clone());
         }
 
         // Build MIME type map
         for mime_type in &self.languages[&id].mime_types {
-            self.mime_map.insert(mime_type.clone(), id.clone());
+            let _prev = self.mime_map.insert(mime_type.clone(), id.clone());
         }
     }
 
