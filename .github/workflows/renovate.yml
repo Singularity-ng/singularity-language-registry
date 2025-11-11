@@ -68,7 +68,7 @@ jobs:
         continue-on-error: true
 
       - name: Self-hosted Renovate
-        uses: renovatebot/github-action@v40.3.12
+        uses: renovatebot/github-action@v44.0.2
         env:
           # Use GitHub App token if available, otherwise use GITHUB_TOKEN
           RENOVATE_TOKEN: ${{ steps.get_token.outputs.token || secrets.GITHUB_TOKEN }}
