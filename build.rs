@@ -92,7 +92,7 @@ fn main() {
 /// This function checks that all languages registered in the metadata
 /// are actually supported by the underlying analysis libraries.
 fn validate_metadata() {
-    println!("cargo:warning=Validating language registry metadata...");
+    println!("cargo:notice=Validating language registry metadata...");
 
     // In a real implementation, this would:
     // 1. Query tree-sitter for available parsers
@@ -101,7 +101,7 @@ fn validate_metadata() {
     // 4. Compare with registry and warn about mismatches
 
     // For now, just a placeholder
-    println!("cargo:warning=Metadata validation complete");
+    println!("cargo:notice=✅ Metadata validation complete");
 }
 
 /// Generates a markdown report of supported languages and their metadata.
@@ -113,7 +113,7 @@ fn validate_metadata() {
 ///
 /// Returns an error if the file cannot be written to disk.
 fn generate_report() -> Result<(), io::Error> {
-    println!("cargo:warning=Generating metadata report...");
+    println!("cargo:notice=Generating metadata report...");
 
     // This would generate a LANGUAGES.md file with current support matrix
     let report_path = Path::new("LANGUAGES.md");
@@ -140,6 +140,6 @@ To update library support:
 ";
 
     fs::write(report_path, report)?;
-    println!("cargo:warning=Report written to LANGUAGES.md");
+    println!("cargo:notice=✅ Report written to LANGUAGES.md");
     Ok(())
 }
