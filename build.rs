@@ -1,4 +1,62 @@
-//! Build script for validating language metadata
+//! Build script for validating language metadata and Linguist integration
+//!
+//! ## Language Registry Source
+//!
+//! The language registry is derived from GitHub Linguist's authoritative language list:
+//! <https://github.com/github-linguist/linguist/blob/main/lib/linguist/languages.yml>
+//!
+//! This ensures Singularity language definitions stay consistent with GitHub's standard.
+//! Renovate automatically alerts when Linguist updates (weekly schedule).
+//!
+//! ## Extended Linguist Integration (Option 2 - In Progress)
+//!
+//! ### Phase 1: Language Definitions (✅ DONE)
+//! - ✅ `languages.yml` synced to registry
+//! - ✅ `supported_in_singularity` flag for explicit support
+//! - ✅ Weekly Renovate alerts
+//!
+//! ### Phase 2: File Classification (🔧 IN PROGRESS)
+//!
+//! #### Implementation Step 1: Manual Synchronization (Current)
+//! Run the synchronization script when Linguist updates:
+//! ```bash
+//! python3 scripts/sync_linguist_patterns.py > src/file_classifier_generated.rs
+//! cargo test
+//! git add src/file_classifier_generated.rs
+//! git commit -m "chore(linguist): sync file classification patterns"
+//! ```
+//!
+//! #### Implementation Step 2: Automated Synchronization (Future)
+//! This build script can be extended to:
+//! ```bash
+//! cargo xtask sync-linguist
+//! ```
+//!
+//! Which will:
+//! 1. Download `vendor.yml` from Linguist
+//! 2. Download `generated.rb` from Linguist
+//! 3. Parse and extract patterns
+//! 4. Generate Rust code arrays
+//! 5. Update `src/file_classifier_generated.rs`
+//! 6. Run tests to validate
+//!
+//! #### Patterns Extracted
+//! - **Vendored**: `node_modules/`, `vendor/`, `.yarn/`, `Pods/`, `dist/`, `build/`
+//! - **Generated**: `.pb.rs`, `.pb.go`, `.generated.ts`, `.designer.cs`, `.meta`
+//! - **Binary**: `.png`, `.jpg`, `.zip`, `.exe`, `.dll`, `.pdf`
+//!
+//! ### Phase 3: Detection Heuristics (📋 PLANNED)
+//! - Extract `heuristics.yml` from Linguist (35KB)
+//! - Generate fallback language detection for ambiguous extensions
+//! - Support: `.pl` (Perl vs Prolog), `.m` (Objective-C vs Matlab), etc.
+//!
+//! ### Maintenance Workflow
+//! When Renovate creates a Linguist update PR:
+//! 1. Review language definition changes
+//! 2. Run: `python3 scripts/sync_linguist_patterns.py`
+//! 3. Run: `cargo test`
+//! 4. Commit changes: `git add . && git commit`
+//! 5. Merge and create release
 //!
 //! This can be used to ensure registry metadata matches actual library capabilities.
 //! Run with: cargo build --features validate-metadata

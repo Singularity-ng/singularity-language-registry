@@ -54,6 +54,7 @@
 //! ```
 
 pub mod detection;
+pub mod file_classifier;
 pub mod metadata;
 pub mod registry;
 pub mod utils;
@@ -84,6 +85,9 @@ pub use metadata::{
     generate_metadata_report, get_known_support, validate_metadata, CapabilityMismatch,
     MetadataSource, MetadataValidation,
 };
+
+// File classification (from Linguist patterns)
+pub use file_classifier::{FileClass, FileClassifier};
 
 // Version information
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

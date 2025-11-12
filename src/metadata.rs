@@ -4,6 +4,7 @@
 //! metadata with the actual capabilities of underlying libraries.
 
 use crate::registry::LANGUAGE_REGISTRY;
+use std::sync::atomic::Ordering;
 
 /// Metadata source for language capabilities
 #[derive(Debug, Clone)]
@@ -52,7 +53,7 @@ pub fn validate_metadata(source: &MetadataSource) -> MetadataValidation {
     // Check RCA support
     for lang_id in &source.rca_languages {
         if let Some(lang) = LANGUAGE_REGISTRY.get_language(lang_id) {
-            if !lang.rca_supported {
+            if !lang.rca_supported.load(Ordering::Relaxed) {
                 capability_mismatches.push(CapabilityMismatch {
                     language: lang_id.clone(),
                     capability: "RCA".to_owned(),
@@ -83,7 +84,7 @@ pub fn validate_metadata(source: &MetadataSource) -> MetadataValidation {
 
     // Check for languages in registry but not in sources
     for lang in LANGUAGE_REGISTRY.supported_languages() {
-        if lang.rca_supported && !source.rca_languages.contains(&lang.id) {
+        if lang.rca_supported.load(Ordering::Relaxed) && !source.rca_languages.contains(&lang.id) {
             capability_mismatches.push(CapabilityMismatch {
                 language: lang.id.clone(),
                 capability: "RCA".to_owned(),
@@ -149,7 +150,11 @@ pub fn generate_metadata_report() -> String {
             "| {} | {} | {} | {} | {} | {} |",
             lang.name,
             lang.extensions.join(", "),
-            if lang.rca_supported { "✓" } else { "✗" },
+            if lang.rca_supported.load(Ordering::Relaxed) {
+                "✓"
+            } else {
+                "✗"
+            },
             if lang.ast_grep_supported {
                 "✓"
             } else {
@@ -173,19 +178,7 @@ pub fn generate_metadata_report() -> String {
 pub fn get_known_support() -> MetadataSource {
     MetadataSource {
         // RCA supported languages (from rust-code-analysis)
-        rca_languages: vec![
-            "rust".to_owned(),
-            "c".to_owned(),
-            "cpp".to_owned(),
-            "go".to_owned(),
-            "java".to_owned(),
-            "python".to_owned(),
-            "javascript".to_owned(),
-            "typescript".to_owned(),
-            "csharp".to_owned(),
-            "kotlin".to_owned(),
-            "lua".to_owned(),
-        ],
+        rca_languages: vec![],
 
         // AST-Grep supported languages
         ast_grep_languages: vec![
@@ -198,7 +191,6 @@ pub fn get_known_support() -> MetadataSource {
             "c".to_owned(),
             "cpp".to_owned(),
             "csharp".to_owned(),
-            "kotlin".to_owned(),
             "elixir".to_owned(),
             "erlang".to_owned(),
             "gleam".to_owned(),

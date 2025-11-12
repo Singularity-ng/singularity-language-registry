@@ -9,6 +9,8 @@
     reason = "Examples are meant to demonstrate usage and print output to the user"
 )]
 
+use std::sync::atomic::Ordering;
+
 use singularity_language_registry::{
     ast_grep_supported_languages, detect_from_content, detect_language, get_language,
     get_language_by_alias, is_detectable, languages_by_families, rca_supported_languages,
@@ -41,7 +43,10 @@ fn main() {
     println!("\n2. Language Lookup:");
     if let Some(elixir) = get_language("elixir") {
         println!("  Elixir extensions: {:?}", elixir.extensions);
-        println!("  RCA supported: {}", elixir.rca_supported);
+        println!(
+            "  RCA supported: {}",
+            elixir.rca_supported.load(Ordering::Relaxed)
+        );
         println!("  AST-Grep supported: {}", elixir.ast_grep_supported);
     }
 

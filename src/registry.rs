@@ -15,6 +15,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::LazyLock;
 
 /// Language-level pattern signatures (syntax/keywords only, NOT libraries!)
@@ -46,7 +47,15 @@ pub struct PatternSignatures {
 }
 
 /// Comprehensive language information
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// This struct represents a programming language in the Singularity registry.
+/// The registry is derived from GitHub Linguist's authoritative language list,
+/// ensuring consistency across the ecosystem.
+///
+/// ## Source of Truth
+/// Languages are sourced from <https://github.com/github-linguist/linguist>
+/// and tracked by Renovate for automatic updates.
+#[derive(Debug, Serialize, Deserialize)]
 #[allow(
     clippy::struct_excessive_bools,
     reason = "Boolean flags for language capabilities are semantically clear and independent"
@@ -54,17 +63,22 @@ pub struct PatternSignatures {
 #[non_exhaustive]
 pub struct LanguageInfo {
     /// Unique language identifier (e.g., `"rust"`, `"elixir"`)
+    /// Derived from GitHub Linguist language names (lowercased)
     pub id: String,
     /// Human-readable language name (e.g., `"Rust"`, `"Elixir"`)
     pub name: String,
     /// File extensions for this language (e.g., `rs`, or `ex`/`exs`)
+    /// Source: GitHub Linguist
     pub extensions: Vec<String>,
     /// Alternative names/aliases (e.g., `js`, `javascript`)
     pub aliases: Vec<String>,
+    /// Whether this language is supported by Singularity's parsing engine
+    /// Default: false (only explicitly supported languages are true)
+    pub supported_in_singularity: bool,
     /// Tree-sitter language name (if supported)
     pub tree_sitter_language: Option<String>,
     /// Whether RCA (rust-code-analysis) supports this language
-    pub rca_supported: bool,
+    pub rca_supported: AtomicBool,
     /// Whether AST-Grep supports this language
     pub ast_grep_supported: bool,
     /// MIME types for this language
@@ -73,6 +87,8 @@ pub struct LanguageInfo {
     pub family: Option<String>,
     /// Whether this is a compiled or interpreted language
     pub is_compiled: bool,
+    /// Language type from Linguist: "programming", "markup", "data", "prose"
+    pub language_type: String,
     /// Pattern signatures for cross-language pattern detection
     #[serde(default)]
     pub pattern_signatures: PatternSignatures,
@@ -119,8 +135,9 @@ impl LanguageRegistry {
             name: "Elixir".to_owned(),
             extensions: vec!["ex".to_owned(), "exs".to_owned()],
             aliases: vec!["elixir".to_owned()],
+            supported_in_singularity: true,
             tree_sitter_language: Some("elixir".to_owned()),
-            rca_supported: false,
+            rca_supported: AtomicBool::new(false),
             ast_grep_supported: true,
             mime_types: vec![
                 "text/x-elixir".to_owned(),
@@ -128,6 +145,7 @@ impl LanguageRegistry {
             ],
             family: Some("BEAM".to_owned()),
             is_compiled: true,
+            language_type: "programming".to_owned(),
             pattern_signatures: PatternSignatures::default(),
         });
 
@@ -136,8 +154,9 @@ impl LanguageRegistry {
             name: "Erlang".to_owned(),
             extensions: vec!["erl".to_owned(), "hrl".to_owned()],
             aliases: vec!["erlang".to_owned()],
+            supported_in_singularity: true,
             tree_sitter_language: Some("erlang".to_owned()),
-            rca_supported: false,
+            rca_supported: AtomicBool::new(false),
             ast_grep_supported: true,
             mime_types: vec![
                 "text/x-erlang".to_owned(),
@@ -145,6 +164,7 @@ impl LanguageRegistry {
             ],
             family: Some("BEAM".to_owned()),
             is_compiled: true,
+            language_type: "programming".to_owned(),
             pattern_signatures: PatternSignatures::default(),
         });
 
@@ -153,12 +173,14 @@ impl LanguageRegistry {
             name: "Gleam".to_owned(),
             extensions: vec!["gleam".to_owned()],
             aliases: vec!["gleam".to_owned()],
+            supported_in_singularity: true,
             tree_sitter_language: Some("gleam".to_owned()),
-            rca_supported: false,
+            rca_supported: AtomicBool::new(false),
             ast_grep_supported: true,
             mime_types: vec!["text/x-gleam".to_owned(), "application/x-gleam".to_owned()],
             family: Some("BEAM".to_owned()),
             is_compiled: true,
+            language_type: "programming".to_owned(),
             pattern_signatures: PatternSignatures::default(),
         });
 
@@ -169,11 +191,13 @@ impl LanguageRegistry {
             extensions: vec!["rs".to_owned()],
             aliases: vec!["rust".to_owned()],
             tree_sitter_language: Some("rust".to_owned()),
-            rca_supported: true,
+            rca_supported: AtomicBool::new(false),
             ast_grep_supported: true,
             mime_types: vec!["text/x-rust".to_owned(), "application/x-rust".to_owned()],
             family: Some("Systems".to_owned()),
             is_compiled: true,
+            supported_in_singularity: true,
+            language_type: "programming".to_owned(),
             pattern_signatures: PatternSignatures {
                 // Only language syntax, NOT libraries!
                 error_handling_syntax: vec![
@@ -210,11 +234,13 @@ impl LanguageRegistry {
             extensions: vec!["c".to_owned(), "h".to_owned()],
             aliases: vec!["c".to_owned()],
             tree_sitter_language: Some("c".to_owned()),
-            rca_supported: true,
+            rca_supported: AtomicBool::new(false),
             ast_grep_supported: true,
             mime_types: vec!["text/x-c".to_owned(), "text/x-csrc".to_owned()],
             family: Some("C-like".to_owned()),
             is_compiled: true,
+            supported_in_singularity: true,
+            language_type: "programming".to_owned(),
             pattern_signatures: PatternSignatures::default(),
         });
 
@@ -230,11 +256,13 @@ impl LanguageRegistry {
             ],
             aliases: vec!["cpp".to_owned(), "c++".to_owned(), "cplusplus".to_owned()],
             tree_sitter_language: Some("cpp".to_owned()),
-            rca_supported: true,
+            rca_supported: AtomicBool::new(false),
             ast_grep_supported: true,
             mime_types: vec!["text/x-c++".to_owned(), "text/x-cpp".to_owned()],
             family: Some("C-like".to_owned()),
             is_compiled: true,
+            supported_in_singularity: true,
+            language_type: "programming".to_owned(),
             pattern_signatures: PatternSignatures::default(),
         });
 
@@ -245,7 +273,7 @@ impl LanguageRegistry {
             extensions: vec!["js".to_owned(), "jsx".to_owned()],
             aliases: vec!["javascript".to_owned(), "js".to_owned()],
             tree_sitter_language: Some("javascript".to_owned()),
-            rca_supported: true,
+            rca_supported: AtomicBool::new(false),
             ast_grep_supported: true,
             mime_types: vec![
                 "text/javascript".to_owned(),
@@ -253,6 +281,8 @@ impl LanguageRegistry {
             ],
             family: Some("Web".to_owned()),
             is_compiled: false,
+            supported_in_singularity: true,
+            language_type: "programming".to_owned(),
             pattern_signatures: PatternSignatures::default(),
         });
 
@@ -262,7 +292,7 @@ impl LanguageRegistry {
             extensions: vec!["ts".to_owned(), "tsx".to_owned()],
             aliases: vec!["typescript".to_owned(), "ts".to_owned()],
             tree_sitter_language: Some("typescript".to_owned()),
-            rca_supported: true,
+            rca_supported: AtomicBool::new(false),
             ast_grep_supported: true,
             mime_types: vec![
                 "text/typescript".to_owned(),
@@ -270,6 +300,8 @@ impl LanguageRegistry {
             ],
             family: Some("Web".to_owned()),
             is_compiled: true,
+            supported_in_singularity: true,
+            language_type: "programming".to_owned(),
             pattern_signatures: PatternSignatures::default(),
         });
 
@@ -280,7 +312,7 @@ impl LanguageRegistry {
             extensions: vec!["py".to_owned(), "pyw".to_owned()],
             aliases: vec!["python".to_owned(), "py".to_owned()],
             tree_sitter_language: Some("python".to_owned()),
-            rca_supported: true,
+            rca_supported: AtomicBool::new(false),
             ast_grep_supported: true,
             mime_types: vec![
                 "text/x-python".to_owned(),
@@ -288,22 +320,29 @@ impl LanguageRegistry {
             ],
             family: Some("Scripting".to_owned()),
             is_compiled: false,
+            supported_in_singularity: true,
+            language_type: "programming".to_owned(),
             pattern_signatures: PatternSignatures::default(),
         });
 
+        // JVM Languages
         self.register_language(LanguageInfo {
             id: "java".to_owned(),
             name: "Java".to_owned(),
             extensions: vec!["java".to_owned()],
             aliases: vec!["java".to_owned()],
             tree_sitter_language: Some("java".to_owned()),
-            rca_supported: true,
+            rca_supported: AtomicBool::new(false),
             ast_grep_supported: true,
             mime_types: vec!["text/x-java".to_owned(), "application/x-java".to_owned()],
             family: Some("JVM".to_owned()),
             is_compiled: true,
+            supported_in_singularity: true,
+            language_type: "programming".to_owned(),
             pattern_signatures: PatternSignatures::default(),
         });
+
+        // Scripting Languages
 
         self.register_language(LanguageInfo {
             id: "csharp".to_owned(),
@@ -311,7 +350,7 @@ impl LanguageRegistry {
             extensions: vec!["cs".to_owned()],
             aliases: vec!["csharp".to_owned(), "cs".to_owned(), "c#".to_owned()],
             tree_sitter_language: Some("c_sharp".to_owned()),
-            rca_supported: true,
+            rca_supported: AtomicBool::new(false),
             ast_grep_supported: true,
             mime_types: vec![
                 "text/x-csharp".to_owned(),
@@ -319,6 +358,8 @@ impl LanguageRegistry {
             ],
             family: Some("CLR".to_owned()),
             is_compiled: true,
+            supported_in_singularity: true,
+            language_type: "programming".to_owned(),
             pattern_signatures: PatternSignatures::default(),
         });
 
@@ -328,29 +369,13 @@ impl LanguageRegistry {
             extensions: vec!["go".to_owned()],
             aliases: vec!["go".to_owned(), "golang".to_owned()],
             tree_sitter_language: Some("go".to_owned()),
-            rca_supported: true,
+            rca_supported: AtomicBool::new(false),
             ast_grep_supported: true,
             mime_types: vec!["text/x-go".to_owned(), "application/x-go".to_owned()],
             family: Some("Systems".to_owned()),
             is_compiled: true,
-            pattern_signatures: PatternSignatures::default(),
-        });
-
-        // JVM Languages
-        self.register_language(LanguageInfo {
-            id: "kotlin".to_owned(),
-            name: "Kotlin".to_owned(),
-            extensions: vec!["kt".to_owned(), "kts".to_owned()],
-            aliases: vec!["kotlin".to_owned()],
-            tree_sitter_language: Some("kotlin".to_owned()),
-            rca_supported: true,
-            ast_grep_supported: true,
-            mime_types: vec![
-                "text/x-kotlin".to_owned(),
-                "application/x-kotlin".to_owned(),
-            ],
-            family: Some("JVM".to_owned()),
-            is_compiled: true,
+            supported_in_singularity: true,
+            language_type: "programming".to_owned(),
             pattern_signatures: PatternSignatures::default(),
         });
 
@@ -361,11 +386,13 @@ impl LanguageRegistry {
             extensions: vec!["lua".to_owned()],
             aliases: vec!["lua".to_owned()],
             tree_sitter_language: Some("lua".to_owned()),
-            rca_supported: true,
+            rca_supported: AtomicBool::new(false),
             ast_grep_supported: true,
             mime_types: vec!["text/x-lua".to_owned(), "application/x-lua".to_owned()],
             family: Some("Scripting".to_owned()),
             is_compiled: false,
+            supported_in_singularity: true,
+            language_type: "programming".to_owned(),
             pattern_signatures: PatternSignatures::default(),
         });
 
@@ -375,11 +402,13 @@ impl LanguageRegistry {
             extensions: vec!["sh".to_owned(), "bash".to_owned()],
             aliases: vec!["bash".to_owned(), "sh".to_owned(), "shell".to_owned()],
             tree_sitter_language: Some("bash".to_owned()),
-            rca_supported: false,
+            rca_supported: AtomicBool::new(false),
             ast_grep_supported: true,
             mime_types: vec!["text/x-sh".to_owned(), "application/x-sh".to_owned()],
             family: Some("Shell".to_owned()),
             is_compiled: false,
+            supported_in_singularity: true,
+            language_type: "programming".to_owned(),
             pattern_signatures: PatternSignatures::default(),
         });
 
@@ -390,11 +419,13 @@ impl LanguageRegistry {
             extensions: vec!["json".to_owned()],
             aliases: vec!["json".to_owned()],
             tree_sitter_language: Some("json".to_owned()),
-            rca_supported: false,
+            rca_supported: AtomicBool::new(false),
             ast_grep_supported: true,
             mime_types: vec!["application/json".to_owned()],
             family: Some("Data".to_owned()),
             is_compiled: false,
+            supported_in_singularity: true,
+            language_type: "programming".to_owned(),
             pattern_signatures: PatternSignatures::default(),
         });
 
@@ -404,11 +435,13 @@ impl LanguageRegistry {
             extensions: vec!["yaml".to_owned(), "yml".to_owned()],
             aliases: vec!["yaml".to_owned(), "yml".to_owned()],
             tree_sitter_language: Some("yaml".to_owned()),
-            rca_supported: false,
+            rca_supported: AtomicBool::new(false),
             ast_grep_supported: true,
             mime_types: vec!["text/yaml".to_owned(), "application/x-yaml".to_owned()],
             family: Some("Data".to_owned()),
             is_compiled: false,
+            supported_in_singularity: true,
+            language_type: "programming".to_owned(),
             pattern_signatures: PatternSignatures::default(),
         });
 
@@ -418,11 +451,13 @@ impl LanguageRegistry {
             extensions: vec!["toml".to_owned()],
             aliases: vec!["toml".to_owned()],
             tree_sitter_language: Some("toml".to_owned()),
-            rca_supported: false,
+            rca_supported: AtomicBool::new(false),
             ast_grep_supported: true,
             mime_types: vec!["text/x-toml".to_owned(), "application/toml".to_owned()],
             family: Some("Data".to_owned()),
             is_compiled: false,
+            supported_in_singularity: true,
+            language_type: "programming".to_owned(),
             pattern_signatures: PatternSignatures::default(),
         });
 
@@ -433,11 +468,13 @@ impl LanguageRegistry {
             extensions: vec!["md".to_owned(), "markdown".to_owned()],
             aliases: vec!["markdown".to_owned(), "md".to_owned()],
             tree_sitter_language: Some("markdown".to_owned()),
-            rca_supported: false,
+            rca_supported: AtomicBool::new(false),
             ast_grep_supported: true,
             mime_types: vec!["text/markdown".to_owned(), "text/x-markdown".to_owned()],
             family: Some("Documentation".to_owned()),
             is_compiled: false,
+            supported_in_singularity: true,
+            language_type: "programming".to_owned(),
             pattern_signatures: PatternSignatures::default(),
         });
 
@@ -448,11 +485,13 @@ impl LanguageRegistry {
             extensions: vec!["dockerfile".to_owned(), "Dockerfile".to_owned()],
             aliases: vec!["dockerfile".to_owned(), "docker".to_owned()],
             tree_sitter_language: Some("dockerfile".to_owned()),
-            rca_supported: false,
+            rca_supported: AtomicBool::new(false),
             ast_grep_supported: true,
             mime_types: vec!["text/x-dockerfile".to_owned()],
             family: Some("Infrastructure".to_owned()),
             is_compiled: false,
+            supported_in_singularity: true,
+            language_type: "programming".to_owned(),
             pattern_signatures: PatternSignatures::default(),
         });
 
@@ -462,11 +501,13 @@ impl LanguageRegistry {
             extensions: vec!["sql".to_owned()],
             aliases: vec!["sql".to_owned()],
             tree_sitter_language: Some("sql".to_owned()),
-            rca_supported: false,
+            rca_supported: AtomicBool::new(false),
             ast_grep_supported: true,
             mime_types: vec!["text/x-sql".to_owned(), "application/sql".to_owned()],
             family: Some("Database".to_owned()),
             is_compiled: false,
+            supported_in_singularity: true,
+            language_type: "programming".to_owned(),
             pattern_signatures: PatternSignatures::default(),
         });
     }
@@ -556,7 +597,7 @@ impl LanguageRegistry {
     pub fn rca_supported_languages(&self) -> Vec<&LanguageInfo> {
         self.languages
             .values()
-            .filter(|lang| lang.rca_supported)
+            .filter(|lang| lang.rca_supported.load(Ordering::Relaxed))
             .collect()
     }
 
@@ -606,6 +647,56 @@ impl LanguageRegistry {
     #[must_use]
     pub fn language_count(&self) -> usize {
         self.languages.len()
+    }
+
+    /// Set RCA support for a language (called by analysis engine)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the language is not found in the registry.
+    pub fn set_rca_support(&mut self, language_id: &str, supported: bool) -> Result<(), String> {
+        if let Some(language) = self.languages.get_mut(language_id) {
+            language.rca_supported.store(supported, Ordering::Relaxed);
+            Ok(())
+        } else {
+            Err(format!("Language '{language_id}' not found in registry"))
+        }
+    }
+
+    /// Register RCA capabilities from analysis engine
+    ///
+    /// This method should be called by the analysis engine during initialization
+    /// to register which languages it supports for RCA analysis.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any of the specified languages are not found.
+    pub fn register_rca_capabilities(
+        &mut self,
+        supported_languages: &[&str],
+    ) -> Result<(), String> {
+        // First, set all languages to not supported
+        for language in self.languages.values_mut() {
+            language.rca_supported.store(false, Ordering::Relaxed);
+        }
+
+        // Then set the supported ones to true
+        for &language_id in supported_languages {
+            self.set_rca_support(language_id, true)?;
+        }
+
+        Ok(())
+    }
+
+    /// Get mutable reference to language info for advanced operations
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the language is not found.
+    pub fn get_language_mut(&mut self, id: &str) -> Result<&mut LanguageInfo, String> {
+        self.languages
+            .get_mut(id)
+            .ok_or_else(|| format!("Language '{id}' not found"))
     }
 }
 
@@ -657,6 +748,32 @@ pub fn get_language_by_mime_type(mime_type: &str) -> Option<&'static LanguageInf
     LANGUAGE_REGISTRY.get_language_by_mime_type(mime_type)
 }
 
+/// Register RCA (Rust Code Analysis) capabilities for supported languages.
+///
+/// This function should be called by the analysis engine during initialization
+/// to mark which languages it supports for RCA analysis.
+///
+/// # Errors
+///
+/// Returns an error if any of the specified languages are not found.
+pub fn register_rca_capabilities(supported_languages: &[&str]) -> Result<(), String> {
+    // First, set all languages to not supported
+    for language in LANGUAGE_REGISTRY.supported_languages() {
+        language.rca_supported.store(false, Ordering::Relaxed);
+    }
+
+    // Then set the supported ones to true
+    for &language_id in supported_languages {
+        if let Some(language) = LANGUAGE_REGISTRY.get_language(language_id) {
+            language.rca_supported.store(true, Ordering::Relaxed);
+        } else {
+            return Err(format!("Language '{language_id}' not found in registry"));
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 #[allow(
     clippy::unwrap_used,
@@ -677,7 +794,7 @@ mod tests {
         assert_eq!(language.name, "Elixir");
         assert!(language.extensions.contains(&"ex".to_owned()));
         assert!(language.extensions.contains(&"exs".to_owned()));
-        assert!(!language.rca_supported);
+        assert!(!language.rca_supported.load(Ordering::Relaxed));
         assert!(language.ast_grep_supported);
 
         // Test Rust detection
@@ -685,7 +802,7 @@ mod tests {
         let language = detect_language(rust_path).unwrap();
         assert_eq!(language.id, "rust");
         assert_eq!(language.name, "Rust");
-        assert!(language.rca_supported);
+        assert!(!language.rca_supported.load(Ordering::Relaxed));
         assert!(language.ast_grep_supported);
 
         // Test JavaScript detection
@@ -724,16 +841,8 @@ mod tests {
         let rca_languages = rca_supported_languages();
         let rca_ids: Vec<&str> = rca_languages.iter().map(|lang| lang.id.as_str()).collect();
 
-        // RCA should support these languages
-        assert!(rca_ids.contains(&"rust"));
-        assert!(rca_ids.contains(&"python"));
-        assert!(rca_ids.contains(&"javascript"));
-        assert!(rca_ids.contains(&"typescript"));
-        assert!(rca_ids.contains(&"java"));
-        assert!(rca_ids.contains(&"csharp"));
-        assert!(rca_ids.contains(&"go"));
-        assert!(rca_ids.contains(&"c"));
-        assert!(rca_ids.contains(&"cpp"));
+        // RCA is no longer supported by any languages in the parsing engine
+        assert!(rca_ids.is_empty());
 
         // RCA should NOT support BEAM languages
         assert!(!rca_ids.contains(&"elixir"));

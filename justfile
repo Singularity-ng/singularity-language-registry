@@ -118,6 +118,19 @@ ci-local:
 changelog:
     git log --pretty=format:"- %s (%h)" --reverse > CHANGELOG.md
 
+# Sync file classification patterns from GitHub Linguist (Phase 2)
+sync-linguist:
+    #!/usr/bin/env bash
+    set -e
+    echo "Synchronizing file classification patterns from GitHub Linguist..."
+    python3 scripts/sync_linguist_patterns.py > src/file_classifier_generated.rs
+    echo "✅ Patterns synced to src/file_classifier_generated.rs"
+    echo ""
+    echo "Next steps:"
+    echo "  1. cargo test"
+    echo "  2. git add src/file_classifier_generated.rs"
+    echo "  3. git commit -m 'chore(linguist): sync file classification patterns'"
+
 # Verify everything before PR
 verify: fmt clippy test audit renovate-validate doc
     @echo "✅ All checks passed!"

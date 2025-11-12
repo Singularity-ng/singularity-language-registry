@@ -43,6 +43,50 @@
   // Package Rules - ordered by priority
   "packageRules": [
     // ===================
+    // GitHub Linguist (Language Registry Source)
+    // ===================
+    {
+      "description": "🔤 GitHub Linguist language list updates",
+      "matchDatasources": ["github-tags"],
+      "matchPackagePatterns": ["github-linguist/linguist"],
+      "schedule": ["weekly"],
+      "labels": ["linguist", "language-registry", "dependencies"],
+      "prPriority": 5,
+      "automerge": false,  // Manual review for language definition changes
+      "commitMessagePrefix": "chore(linguist):",
+      "prBodyNotes": [
+        "## ⚠️ Linguist Update Detected",
+        "",
+        "GitHub Linguist (the authoritative source for language definitions) has been updated.",
+        "",
+        "### What to Review",
+        "",
+        "1. **Language Definitions** (Phase 1 - Active):",
+        "   - New languages added to Linguist?",
+        "   - Existing language metadata changed?",
+        "   - Need to update `supported_in_singularity` flags?",
+        "",
+        "2. **File Classification** (Phase 2 - Ready):",
+        "   - Changes to vendor patterns (vendor.yml)?",
+        "   - Changes to generated file detection (generated.rb)?",
+        "   - Changes to binary file patterns?",
+        "",
+        "3. **Detection Heuristics** (Phase 3 - Planned):",
+        "   - Changes to language detection heuristics (heuristics.yml)?",
+        "",
+        "See [LINGUIST_INTEGRATION.md](LINGUIST_INTEGRATION.md) for details.",
+        "",
+        "### Action Items",
+        "",
+        "- [ ] Review language definition changes",
+        "- [ ] Update supported languages if needed",
+        "- [ ] Run `cargo test` to validate",
+        "- [ ] Update file classification patterns if needed (Phase 2)",
+        "- [ ] Merge and create a new release"
+      ]
+    },
+
+    // ===================
     // Security Updates
     // ===================
     {
