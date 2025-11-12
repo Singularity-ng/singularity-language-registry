@@ -74,19 +74,40 @@ fn main() -> Result<()> {
             let id = k.as_str().unwrap_or_default().to_string();
             let name = id.clone();
             // Map some fields
-            let extensions = v.get(&serde_yaml::Value::from("extensions")).and_then(|x| x.as_sequence()).map(|seq| {
-                seq.iter().filter_map(|e| e.as_str().map(|s| s.to_string())).collect()
-            }).unwrap_or_default();
+            let extensions = v
+                .get(&serde_yaml::Value::from("extensions"))
+                .and_then(|x| x.as_sequence())
+                .map(|seq| {
+                    seq.iter()
+                        .filter_map(|e| e.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
 
-            let aliases = v.get(&serde_yaml::Value::from("aliases")).and_then(|x| x.as_sequence()).map(|seq| {
-                seq.iter().filter_map(|e| e.as_str().map(|s| s.to_string())).collect()
-            }).unwrap_or_default();
+            let aliases = v
+                .get(&serde_yaml::Value::from("aliases"))
+                .and_then(|x| x.as_sequence())
+                .map(|seq| {
+                    seq.iter()
+                        .filter_map(|e| e.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
 
-            let mime_types = v.get(&serde_yaml::Value::from("mime_types")).and_then(|x| x.as_sequence()).map(|seq| {
-                seq.iter().filter_map(|e| e.as_str().map(|s| s.to_string())).collect()
-            }).unwrap_or_default();
+            let mime_types = v
+                .get(&serde_yaml::Value::from("mime_types"))
+                .and_then(|x| x.as_sequence())
+                .map(|seq| {
+                    seq.iter()
+                        .filter_map(|e| e.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
 
-            let tree_sitter_language = v.get(&serde_yaml::Value::from("tree_sitter_language")).and_then(|x| x.as_str()).map(|s| s.to_string());
+            let tree_sitter_language = v
+                .get(&serde_yaml::Value::from("tree_sitter_language"))
+                .and_then(|x| x.as_str())
+                .map(|s| s.to_string());
 
             snapshots.push(SnapshotEntry {
                 id,

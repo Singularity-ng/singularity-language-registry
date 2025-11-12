@@ -62,7 +62,7 @@ fn parse_vendor_yml(content: &str) -> HashSet<String> {
                 .to_string();
 
             if !cleaned.is_empty() && !cleaned.contains('(') && cleaned.len() < 100 {
-                patterns.insert(cleaned);
+                let _ = patterns.insert(cleaned);
             }
         }
     }
@@ -88,7 +88,7 @@ fn parse_generated_rb(content: &str) -> HashSet<String> {
             if let Some(matched) = cap.get(1) {
                 let pattern = matched.as_str().to_string();
                 if pattern.len() < 100 && !pattern.contains("//") {
-                    patterns.insert(pattern);
+                    let _ = patterns.insert(pattern);
                 }
             }
         }
@@ -118,7 +118,7 @@ fn parse_heuristics_yml(content: &str) -> HashMap<String, Vec<String>> {
             // Save previous extension's patterns
             if let Some(ext) = current_extension.take() {
                 if !patterns.is_empty() {
-                    heuristics.insert(ext, patterns.clone());
+                    let _ = heuristics.insert(ext, patterns.clone());
                     patterns.clear();
                 }
             }
@@ -142,7 +142,7 @@ fn parse_heuristics_yml(content: &str) -> HashMap<String, Vec<String>> {
     // Save last extension
     if let Some(ext) = current_extension {
         if !patterns.is_empty() {
-            heuristics.insert(ext, patterns);
+            let _ = heuristics.insert(ext, patterns);
         }
     }
 
@@ -166,16 +166,16 @@ fn categorize_patterns(
         if pattern.starts_with('.') && pattern.len() < 10 {
             // It's an extension
             if binary_exts.contains(&pattern.as_str()) {
-                binary.insert(pattern.clone());
+                let _ = binary.insert(pattern.clone());
             } else if pattern.contains("pb")
                 || pattern.contains("generated")
                 || pattern.contains("proto")
             {
-                generated.insert(pattern.clone());
+                let _ = generated.insert(pattern.clone());
             }
         } else {
             // It's a path
-            vendored.insert(pattern.clone());
+            let _ = vendored.insert(pattern.clone());
         }
     }
 

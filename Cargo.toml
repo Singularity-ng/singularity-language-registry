@@ -127,6 +127,12 @@ default = []
 validate-metadata = []
 sync-tool = ["reqwest", "tokio", "regex"]
 
+[workspace]
+members = [
+    "tools/linguist_to_snapshot",
+    "tools/generate_snapshot_job",
+]
+
 [build-dependencies]
 
 # ═══════════════════════════════════════════════════════════════════════════

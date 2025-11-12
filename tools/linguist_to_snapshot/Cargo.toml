@@ -2,6 +2,12 @@
 name = "linguist_to_snapshot"
 version = "0.1.0"
 edition = "2021"
+description = "Convert GitHub Linguist languages.yml/JSON into the registry snapshot JSON format."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Singularity-ng/singularity-language-registry"
+readme = "../../README.md"
+keywords = ["linguist", "snapshot", "converter", "languages"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 clap = { version = "4.2", features = ["derive"] }

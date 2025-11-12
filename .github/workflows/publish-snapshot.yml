@@ -73,10 +73,11 @@ jobs:
             jq . "$OUT" || true
             exit 1
           fi
-          # ensure each object has id and name fields
-          if ! jq -e '.[0] | has("id") and has("name")' "$OUT" >/dev/null; then
-            echo "Snapshot entries appear to be missing required fields (id/name)"
-            jq '.[0]' "$OUT" || true
+          # ensure every object has non-empty string id and name fields
+          if ! jq -e 'all(.[]; (has("id") and has("name") and (.id|type=="string") and (.name|type=="string") and (.id != "") and (.name != "")))' "$OUT" >/dev/null; then
+            echo "Snapshot validation failed: one or more entries are missing required fields 'id' or 'name', or they are empty/non-string"
+            # Show up to first 5 offending entries
+            jq 'map(select( (has("id")|not) or (has("name")|not) or (.id|type!="string") or (.name|type!="string") or (.id=="") or (.name=="") )) | .[0:5]' "$OUT" || true
             exit 1
           fi
 
