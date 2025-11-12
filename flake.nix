@@ -35,6 +35,7 @@
 
           buildInputs = with pkgs; [
             # Add runtime dependencies here if needed
+            openssl
           ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
             # MacOS specific dependencies
             pkgs.libiconv

@@ -172,6 +172,8 @@ fn categorize_patterns(
                 || pattern.contains("proto")
             {
                 let _ = generated.insert(pattern.clone());
+            } else {
+                // Explicitly ignore other extension-like entries for clarity.
             }
         } else {
             // It's a path
@@ -189,7 +191,7 @@ fn generate_file_classifier_code(
     binary: &HashSet<String>,
 ) -> String {
     let mut code = String::from(
-        r#"// AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
+        r"// AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
 // Generated from GitHub Linguist patterns (vendor.yml, generated.rb)
 // Run: cargo run --bin sync-linguist --features sync-tool
 
@@ -204,7 +206,7 @@ fn generate_file_classifier_code(
 
 /// Vendored code path patterns (from Linguist vendor.yml)
 pub const VENDORED_PATTERNS_FROM_LINGUIST: &[&str] = &[
-"#,
+",
     );
 
     let mut sorted_vendored: Vec<_> = vendored.iter().collect();
@@ -214,12 +216,11 @@ pub const VENDORED_PATTERNS_FROM_LINGUIST: &[&str] = &[
         code.push_str(&format!("    \"{}\",\n", escaped));
     }
 
-    code.push_str(
-        r#"];
+    code.push_str("];\n\n");
 
 /// Generated file patterns (from Linguist generated.rb)
-pub const GENERATED_PATTERNS_FROM_LINGUIST: &[&str] = &[
-"#,
+    pub const GENERATED_PATTERNS_FROM_LINGUIST: &[&str] = &[
+",
     );
 
     let mut sorted_generated: Vec<_> = generated.iter().collect();
@@ -229,12 +230,11 @@ pub const GENERATED_PATTERNS_FROM_LINGUIST: &[&str] = &[
         code.push_str(&format!("    \"{}\",\n", escaped));
     }
 
-    code.push_str(
-        r#"];
+    code.push_str("];\n\n");
 
 /// Binary file extensions (images, archives, executables, documents, media)
-pub const BINARY_PATTERNS_FROM_LINGUIST: &[&str] = &[
-"#,
+    pub const BINARY_PATTERNS_FROM_LINGUIST: &[&str] = &[
+",
     );
 
     let mut sorted_binary: Vec<_> = binary.iter().collect();
@@ -250,7 +250,7 @@ pub const BINARY_PATTERNS_FROM_LINGUIST: &[&str] = &[
 /// Generate Rust code for language detection heuristics (Phase 3)
 fn generate_heuristics_code(heuristics: &HashMap<String, Vec<String>>) -> String {
     let mut code = String::from(
-        r#"// AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
+        r"// AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
 // Generated from GitHub Linguist heuristics.yml (Phase 3)
 // Run: cargo run --bin sync-linguist --features sync-tool
 
@@ -269,7 +269,7 @@ fn generate_heuristics_code(heuristics: &HashMap<String, Vec<String>>) -> String
 /// Language detection heuristics (Phase 3)
 /// Maps file extensions to detection patterns
 pub const LANGUAGE_DETECTION_HEURISTICS: &[(&str, &[&str])] = &[
-"#,
+",
     );
 
     let mut sorted_exts: Vec<_> = heuristics.keys().collect();

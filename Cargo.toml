@@ -6,10 +6,8 @@ license-file = "LICENSE"
 authors = ["Singularity Team"]
 description = "Centralized language registry for all Singularity analysis engines"
 repository = "https://github.com/singularity/singularity"
-readme = "README.md"
 keywords = ["language", "registry", "detection", "parsing", "analysis"]
 categories = ["development-tools"]
-documentation = "https://singularity-ng.github.io/singularity-language-registry/"
 homepage = "https://github.com/singularity/singularity"
 
 # Exclude development/CI files from crates.io package
@@ -72,6 +70,14 @@ exclude = [
     "WORKFLOW_GUIDE.md",
     "CHANGELOG.md",
 
+    # Generated documentation outputs (do not include generated rustdoc or site builds in crates)
+    "target/doc",
+    "target/doc/",
+    "docs/",
+    "docs/**",
+    "book/",
+    "book/**",
+
     # AI documentation (repo version for developers, .release version for users)
     "AGENTS.md",
     "AGENTS.md.release",
@@ -89,10 +95,8 @@ exclude = [
 
 # Documentation metadata for docs.rs and rustdoc
 [package.metadata.docs.rs]
-all-features = true
-rustdoc-args = ["--cfg", "docsrs"]
-cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
-
+# Documentation publishing is intentionally disabled for this repository per project policy.
+all-features = false
 [lib]
 name = "singularity_language_registry"
 path = "src/lib.rs"
