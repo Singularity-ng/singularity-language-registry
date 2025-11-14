@@ -19,8 +19,7 @@ jobs:
 
       - name: Build linguist_to_snapshot tool
         run: |
-          cd tools/linguist_to_snapshot
-          cargo build --release
+          cargo build --release --bin linguist_to_snapshot
 
       - name: Generate snapshot from PR-provided linguist (if present)
         run: |
@@ -28,7 +27,7 @@ jobs:
           INPUT=.github/linguist/languages.yml
           OUT=target/generated_snapshot.json
           if [ -f "$INPUT" ]; then
-            ./tools/linguist_to_snapshot/target/release/linguist_to_snapshot --input "$INPUT" --output "$OUT"
+            ./target/release/linguist_to_snapshot --input "$INPUT" --output "$OUT"
           else
             echo "No languages.yml found in PR; skipping snapshot generation"
           fi
