@@ -7,7 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+## [0.2.0] - 2025-11-14
+
+### Added - Linguist Sync Automation
+- **Phase 2**: File classification patterns (167 vendored, 82 generated) from GitHub Linguist
+- **Phase 3**: Language detection heuristics (124 disambiguation groups, 21 named patterns)
+- **Phase 4**: Complete language metadata for 789 languages (extensions, colors, interpreters, editor modes)
+- Auto-generated Rust source files from Linguist data (575KB total)
+- Comprehensive `sync-linguist` tool with proper YAML parsing and logging
+- `.github/linguist/languages.yml` (154KB) for snapshot generation
+
+### Added - Automated Workflows
+- `sync-linguist.yml` - Auto-syncs patterns on Renovate PRs
+- `publish-snapshot.yml` - Publishes canonical snapshots on push to main
+- `validate-snapshot.yml` - Validates snapshots in all PRs
+- `publish-docs.yml` - Auto-publishes Rust docs to GitHub Pages
+
+### Added - Development Infrastructure
 - Comprehensive release reports with security scanning
 - SBOM (Software Bill of Materials) generation
 - Zero warnings validation with Clippy pedantic + nursery
@@ -15,12 +31,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - All-Nix CI workflow for dev-CI parity
 - Auto-reload direnv configuration
 - Enhanced development shell with curated tools
+- Pre-commit and pre-push git hooks with Nix integration
 
 ### Changed
 - License changed to proprietary (all rights reserved)
 - CI workflow streamlined to single primary job
 - Development shell reduced from 22 to 15 essential tools
 - Release workflow now uses Nix for consistency
+- Sync tool refactored with serde YAML deserialization (replacing regex-based parsing)
+- Improved error handling with `anyhow::Context`
+- Direct file writing instead of stdout redirection
 
 ### Removed
 - Low-value development tools (watchexec, hyperfine, tokei, typos, taplo, yamlfmt, renovate from dev shell)
@@ -36,6 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 4-layer caching in CI (GitHub + Magic Nix + FlakeHub + Cachix)
 - Release reports automatically attached to GitHub releases
 - Local development environment matches CI exactly
+- Automated snapshot publishing workflow with PR creation
+- Renovate integration for keeping Linguist patterns up-to-date
 
 ## [0.1.0] - YYYY-MM-DD
 
@@ -106,5 +128,6 @@ Each release includes:
 
 ---
 
-[Unreleased]: https://github.com/singularity-ng/singularity-language-registry/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/singularity-ng/singularity-language-registry/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/singularity-ng/singularity-language-registry/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/singularity-ng/singularity-language-registry/releases/tag/v0.1.0
