@@ -122,6 +122,10 @@ tokio = { version = "1", features = ["full"], optional = true }
 # Regex for pattern extraction
 regex = { version = "1.10", optional = true }
 
+# Logging for the sync tool
+log = { version = "0.4", optional = true }
+env_logger = { version = "0.11", optional = true }
+
 [[bin]]
 name = "sync-linguist"
 path = "tools/linguist_sync.rs"
@@ -130,7 +134,7 @@ required-features = ["sync-tool"]
 [features]
 default = []
 validate-metadata = []
-sync-tool = ["reqwest", "tokio", "regex"]
+sync-tool = ["reqwest", "tokio", "regex", "log", "env_logger"]
 
 [workspace]
 members = [

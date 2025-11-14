@@ -71,6 +71,10 @@ test:
         fi; \
     fi
 
+# Aggregate all checks used by the git pre-commit hook
+pre-commit: fmt clippy test
+    @echo "✅ Pre-commit checks passed"
+
 # Run tests in release mode
 test-release:
     cargo test --all-features --release
@@ -164,9 +168,8 @@ sync-linguist:
     echo "Phase 3: Language detection heuristics (ambiguous extensions)"
     echo ""
 
-    # Run the Rust sync tool
-    # Phase 2 output goes to file_classifier_generated.rs
-    cargo run --bin sync-linguist --features sync-tool > src/file_classifier_generated.rs 2>&1
+    # Run the Rust sync tool (writes outputs directly into src/)
+    cargo run --bin sync-linguist --features sync-tool
 
     echo ""
     echo "✅ Patterns synced!"

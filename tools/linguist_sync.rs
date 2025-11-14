@@ -1,18 +1,21 @@
-//! Synchronize File Classification and Language Detection Patterns from GitHub Linguist
+//! Synchronize file classification and language detection patterns from GitHub Linguist.
 //!
-//! This tool downloads Linguist's pattern files and generates Rust code for:
-//! - Phase 2: File classification (vendor, generated, binary patterns)
-//! - Phase 3: Language detection heuristics (ambiguous extension resolution)
-//!
-//! Run with: cargo run --bin sync-linguist --features sync-tool
-//!
-//! Output: Generates two files:
-//! - src/file_classifier_generated.rs (Phase 2)
-//! - src/heuristics_generated.rs (Phase 3)
+//! Phase 2 (file classification) and Phase 3 (heuristics) are written directly to the
+//! crate's `src/` directory. Run with:
+//! `cargo run --bin sync-linguist --features sync-tool`
 
 use anyhow::{Context, Result};
+use log::info;
 use regex::Regex;
-use std::collections::{HashMap, HashSet};
+use serde::de::Deserializer;
+use serde::Deserialize;
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    fmt::{self, Write as _},
+    fs,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 const VENDOR_YML_URL: &str =
     "https://raw.githubusercontent.com/github-linguist/linguist/master/lib/linguist/vendor.yml";
@@ -21,332 +24,575 @@ const GENERATED_RB_URL: &str =
 const HEURISTICS_YML_URL: &str =
     "https://raw.githubusercontent.com/github-linguist/linguist/master/lib/linguist/heuristics.yml";
 
-/// Fetch content from a URL
+const FILE_CLASSIFIER_PATH: &str = "src/file_classifier_generated.rs";
+const HEURISTICS_PATH: &str = "src/heuristics_generated.rs";
+
+#[derive(Debug, Deserialize)]
+struct HeuristicsFile {
+    disambiguations: Vec<Disambiguation>,
+    #[serde(default)]
+    named_patterns: BTreeMap<String, StringList>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Disambiguation {
+    extensions: Vec<String>,
+    rules: Vec<Rule>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Rule {
+    #[serde(deserialize_with = "deserialize_string_vec")]
+    language: Vec<String>,
+    #[serde(default)]
+    pattern: Option<StringList>,
+    #[serde(default)]
+    named_pattern: Option<String>,
+    #[serde(default)]
+    negative_pattern: Option<StringList>,
+    #[serde(default)]
+    and: Vec<RuleCondition>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RuleCondition {
+    #[serde(default)]
+    pattern: Option<StringList>,
+    #[serde(default)]
+    named_pattern: Option<String>,
+    #[serde(default)]
+    negative_pattern: Option<StringList>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(untagged)]
+enum StringList {
+    Single(String),
+    Multiple(Vec<String>),
+}
+
+impl StringList {
+    #[allow(
+        clippy::missing_const_for_fn,
+        reason = "StringList holds heap data that cannot be manipulated in const contexts"
+    )]
+    #[allow(
+        clippy::pattern_type_mismatch,
+        reason = "Matching on &StringList to borrow inner data without cloning"
+    )]
+    fn as_slice(&self) -> &[String] {
+        match self {
+            Self::Single(single_value) => std::slice::from_ref(single_value),
+            Self::Multiple(values) => values.as_slice(),
+        }
+    }
+}
+
+/// Deserialize either a single string or a list of strings into a `Vec<String>`.
+///
+/// # Errors
+///
+/// Returns an error when the input cannot be interpreted as a string or list of strings.
+fn deserialize_string_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrVec {
+        Single(String),
+        Multiple(Vec<String>),
+    }
+
+    match StringOrVec::deserialize(deserializer)? {
+        StringOrVec::Single(single) => Ok(vec![single]),
+        StringOrVec::Multiple(values) => Ok(values),
+    }
+}
+
+/// Fetch the contents of a remote Linguist data file.
+///
+/// # Errors
+///
+/// Returns an error if the HTTP request fails or the response body cannot be
+/// read before the timeout elapses.
 async fn fetch_url(url: &str) -> Result<String> {
-    eprintln!("📥 Fetching {}", url);
+    info!("📥 Fetching {url}");
     let client = reqwest::Client::new();
     let response = client
         .get(url)
-        .timeout(std::time::Duration::from_secs(30))
+        .timeout(Duration::from_secs(45))
         .send()
         .await
-        .context(format!("Failed to fetch {}", url))?;
+        .with_context(|| format!("Failed to fetch {url}"))?;
 
+    let status = response.status();
     let content = response
         .text()
         .await
         .context("Failed to read response body")?;
 
-    eprintln!("✅ Fetched {} bytes", content.len());
+    if !status.is_success() {
+        anyhow::bail!("Request to {url} failed with status {status}");
+    }
+
+    info!("✅ Fetched {} bytes from {url}", content.len());
     Ok(content)
 }
 
-/// Parse vendor.yml and extract vendored path patterns
-fn parse_vendor_yml(content: &str) -> HashSet<String> {
+/// Parse Linguist's `vendor.yml` into a sorted set of patterns.
+///
+/// # Errors
+///
+/// Returns an error when the YAML payload cannot be deserialized.
+fn parse_vendor_yml(content: &str) -> Result<BTreeSet<String>> {
+    let patterns: Vec<String> =
+        serde_yaml::from_str(content).context("Failed to parse vendor.yml as YAML list")?;
+    Ok(patterns.into_iter().collect())
+}
+
+/// Parse Linguist's `generated.rb` file and collect quoted patterns.
+///
+/// # Errors
+///
+/// Returns an error when the extraction regex cannot be compiled.
+fn parse_generated_rb(content: &str) -> Result<HashSet<String>> {
+    let quote_pattern =
+        Regex::new(r#"['"]([^'"]+)['"]"#).context("Failed to compile generated.rb regex")?;
     let mut patterns = HashSet::new();
 
     for line in content.lines() {
         let trimmed = line.trim();
-
-        // Skip comments and empty lines
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
 
-        // Extract patterns (YAML list items start with -)
-        if let Some(pattern) = trimmed.strip_prefix("- ") {
-            let cleaned = pattern
-                .trim_matches('"')
-                .trim_matches('\'')
-                .trim()
-                .to_string();
-
-            if !cleaned.is_empty() && !cleaned.contains('(') && cleaned.len() < 100 {
-                let _ = patterns.insert(cleaned);
-            }
-        }
-    }
-
-    patterns
-}
-
-/// Parse generated.rb and extract generated file patterns
-fn parse_generated_rb(content: &str) -> HashSet<String> {
-    let mut patterns = HashSet::new();
-    let quote_pattern = Regex::new(r#"['"](.*?)['"]"#).unwrap();
-
-    for line in content.lines() {
-        let trimmed = line.trim();
-
-        // Skip comments and empty lines
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-
-        // Extract quoted strings
-        for cap in quote_pattern.captures_iter(trimmed) {
-            if let Some(matched) = cap.get(1) {
-                let pattern = matched.as_str().to_string();
-                if pattern.len() < 100 && !pattern.contains("//") {
-                    let _ = patterns.insert(pattern);
+        for capture in quote_pattern.captures_iter(trimmed) {
+            if let Some(matched) = capture.get(1) {
+                let candidate = matched.as_str();
+                if candidate.len() < 160 {
+                    let _was_new = patterns.insert(candidate.to_owned());
                 }
             }
         }
     }
 
-    patterns
+    Ok(patterns)
 }
 
-/// Parse heuristics.yml and extract language detection rules (Phase 3)
-fn parse_heuristics_yml(content: &str) -> HashMap<String, Vec<String>> {
-    let mut heuristics: HashMap<String, Vec<String>> = HashMap::new();
-
-    // Simple parser for disambiguation rules
-    let mut current_extension: Option<String> = None;
-    let mut patterns: Vec<String> = Vec::new();
-
-    for line in content.lines() {
-        let trimmed = line.trim();
-
-        // Skip comments
-        if trimmed.starts_with('#') {
-            continue;
-        }
-
-        // Detect disambiguation blocks (extensions like ".pl:", ".m:", etc.)
-        if trimmed.ends_with(':') && !trimmed.starts_with('-') {
-            // Save previous extension's patterns
-            if let Some(ext) = current_extension.take() {
-                if !patterns.is_empty() {
-                    let _ = heuristics.insert(ext, patterns.clone());
-                    patterns.clear();
-                }
-            }
-
-            current_extension = Some(trimmed.trim_end_matches(':').trim_matches('"').to_string());
-        }
-
-        // Extract pattern content (quoted strings)
-        if trimmed.contains('"') {
-            if let Some(start) = trimmed.find('"') {
-                if let Some(end) = trimmed[start + 1..].find('"') {
-                    let pattern = &trimmed[start + 1..start + 1 + end];
-                    if !pattern.is_empty() && pattern.len() < 200 {
-                        patterns.push(pattern.to_string());
-                    }
-                }
-            }
-        }
-    }
-
-    // Save last extension
-    if let Some(ext) = current_extension {
-        if !patterns.is_empty() {
-            let _ = heuristics.insert(ext, patterns);
-        }
-    }
-
-    heuristics
+/// Parse Linguist's `heuristics.yml` describing disambiguation rules.
+///
+/// # Errors
+///
+/// Returns an error when the YAML payload cannot be deserialized.
+fn parse_heuristics_yml(content: &str) -> Result<HeuristicsFile> {
+    let parsed: HeuristicsFile =
+        serde_yaml::from_str(content).context("Failed to deserialize heuristics.yml")?;
+    Ok(parsed)
 }
 
-/// Categorize patterns into vendored, generated, and binary
-fn categorize_patterns(
-    patterns: &HashSet<String>,
-) -> (HashSet<String>, HashSet<String>, HashSet<String>) {
-    let mut vendored = HashSet::new();
-    let mut generated = HashSet::new();
-    let mut binary = HashSet::new();
-
-    let binary_exts = [
-        ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".zip", ".tar", ".gz", ".rar", ".exe",
-        ".dll", ".pdf", ".mp3", ".mp4",
+fn split_generated_patterns(generated: &HashSet<String>) -> (BTreeSet<String>, BTreeSet<String>) {
+    const BINARY_EXTENSIONS: &[&str] = &[
+        ".3ds", ".3mf", ".7z", ".aac", ".avi", ".bmp", ".bz2", ".class", ".db", ".dylib", ".dll",
+        ".dmg", ".eot", ".exe", ".flac", ".gif", ".gz", ".ico", ".jar", ".jpeg", ".jpg", ".m4a",
+        ".mkv", ".mov", ".mp3", ".mp4", ".mpeg", ".mpg", ".ogg", ".ogv", ".pdf", ".png", ".psd",
+        ".rar", ".sqlite", ".svg", ".tar", ".tiff", ".ttf", ".wasm", ".webm", ".webp", ".woff",
+        ".woff2", ".zip",
     ];
 
-    for pattern in patterns {
-        if pattern.starts_with('.') && pattern.len() < 10 {
-            // It's an extension
-            if binary_exts.contains(&pattern.as_str()) {
-                let _ = binary.insert(pattern.clone());
-            } else if pattern.contains("pb")
-                || pattern.contains("generated")
-                || pattern.contains("proto")
-            {
-                let _ = generated.insert(pattern.clone());
-            } else {
-                // Explicitly ignore other extension-like entries for clarity.
+    let mut generated_patterns = BTreeSet::new();
+    let mut binary_patterns = BTreeSet::new();
+
+    for pattern in generated {
+        if let Some(stripped) = pattern.strip_prefix('.') {
+            let lower = format!(".{}", stripped.to_ascii_lowercase());
+            if BINARY_EXTENSIONS.contains(&lower.as_str()) {
+                let _was_new = binary_patterns.insert(pattern.clone());
+                continue;
             }
-        } else {
-            // It's a path
-            let _ = vendored.insert(pattern.clone());
         }
+
+        let _was_new = generated_patterns.insert(pattern.clone());
     }
 
-    (vendored, generated, binary)
+    (generated_patterns, binary_patterns)
 }
 
-/// Generate Rust code for file classifier patterns (Phase 2)
+fn escape_rust_string(input: &str) -> String {
+    input
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
+}
+
+/// Generate the Phase 2 (file classifier) Rust source.
+///
+/// # Errors
+///
+/// Returns an error if writing into the string buffer fails.
 fn generate_file_classifier_code(
-    vendored: &HashSet<String>,
-    generated: &HashSet<String>,
-    binary: &HashSet<String>,
-) -> String {
-    let mut code = String::from(
-        r"// AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
-// Generated from GitHub Linguist patterns (vendor.yml, generated.rb)
-// Run: cargo run --bin sync-linguist --features sync-tool
+    vendored: &BTreeSet<String>,
+    generated: &BTreeSet<String>,
+    binary: &BTreeSet<String>,
+) -> Result<String> {
+    let mut code = String::new();
 
-//! Auto-generated file classification patterns from GitHub Linguist
-//!
-//! These patterns are kept in sync with GitHub Linguist via:
-//! cargo run --bin sync-linguist --features sync-tool
-//!
-//! Sources:
-//! - vendor.yml: Vendored code detection
-//! - generated.rb: Auto-generated file detection
+    writeln!(
+        code,
+        "// AUTO-GENERATED FILE - DO NOT EDIT MANUALLY\n\
+         // Generated from GitHub Linguist patterns (vendor.yml & generated.rb)\n\
+         // Run: cargo run --bin sync-linguist --features sync-tool\n\
+         \n\
+         //! Auto-generated file classification patterns from GitHub Linguist.\n\
+         //! Sources:\n\
+         //!   • vendor.yml   → vendored path patterns\n\
+         //!   • generated.rb → generated & binary file patterns\n"
+    )?;
 
-/// Vendored code path patterns (from Linguist vendor.yml)
-pub const VENDORED_PATTERNS_FROM_LINGUIST: &[&str] = &[
-",
-    );
-
-    let mut sorted_vendored: Vec<_> = vendored.iter().collect();
-    sorted_vendored.sort();
-    for pattern in sorted_vendored {
-        let escaped = pattern.replace('\\', "\\\\").replace('"', "\\\"");
-        code.push_str(&format!("    \"{}\",\n", escaped));
+    writeln!(
+        code,
+        "/// Vendored code path patterns (from GitHub Linguist vendor.yml)\n\
+         pub const VENDORED_PATTERNS_FROM_LINGUIST: &[&str] = &["
+    )?;
+    for pattern in vendored {
+        writeln!(code, "    \"{}\",", escape_rust_string(pattern))?;
     }
+    writeln!(code, "]\n")?;
 
-    code.push_str("];\n\n");
-
-/// Generated file patterns (from Linguist generated.rb)
-    pub const GENERATED_PATTERNS_FROM_LINGUIST: &[&str] = &[
-",
-    );
-
-    let mut sorted_generated: Vec<_> = generated.iter().collect();
-    sorted_generated.sort();
-    for pattern in sorted_generated {
-        let escaped = pattern.replace('\\', "\\\\").replace('"', "\\\"");
-        code.push_str(&format!("    \"{}\",\n", escaped));
+    writeln!(
+        code,
+        "/// Generated file patterns (from GitHub Linguist generated.rb)\n\
+         pub const GENERATED_PATTERNS_FROM_LINGUIST: &[&str] = &["
+    )?;
+    for pattern in generated {
+        writeln!(code, "    \"{}\",", escape_rust_string(pattern))?;
     }
+    writeln!(code, "]\n")?;
 
-    code.push_str("];\n\n");
-
-/// Binary file extensions (images, archives, executables, documents, media)
-    pub const BINARY_PATTERNS_FROM_LINGUIST: &[&str] = &[
-",
-    );
-
-    let mut sorted_binary: Vec<_> = binary.iter().collect();
-    sorted_binary.sort();
-    for pattern in sorted_binary {
-        code.push_str(&format!("    \"{}\",\n", pattern));
+    writeln!(
+        code,
+        "/// Binary file extensions detected by GitHub Linguist\n\
+         pub const BINARY_PATTERNS_FROM_LINGUIST: &[&str] = &["
+    )?;
+    for pattern in binary {
+        writeln!(code, "    \"{}\",", escape_rust_string(pattern))?;
     }
+    writeln!(code, "];")?;
 
-    code.push_str("];\n");
-    code
+    Ok(code)
 }
 
-/// Generate Rust code for language detection heuristics (Phase 3)
-fn generate_heuristics_code(heuristics: &HashMap<String, Vec<String>>) -> String {
-    let mut code = String::from(
-        r"// AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
-// Generated from GitHub Linguist heuristics.yml (Phase 3)
-// Run: cargo run --bin sync-linguist --features sync-tool
+/// Write a slice literal (e.g., `patterns: &[...]`) to the generated source.
+///
+/// # Errors
+///
+/// Returns an error if writing into the string buffer fails.
+fn push_pattern_slice(code: &mut String, label: &str, patterns: &[String]) -> fmt::Result {
+    if patterns.is_empty() {
+        return writeln!(code, "        {label}: &[],");
+    }
 
-//! Auto-generated language detection heuristics from GitHub Linguist
-//!
-//! These patterns help detect languages for ambiguous file extensions:
-//! - .pl: Perl vs Prolog
-//! - .m: Objective-C vs Matlab
-//! - .rs: Rust (resolved via extension only, but kept for future use)
-//!
-//! Implementation roadmap:
-//! 1. Extract patterns from heuristics.yml
-//! 2. Build decision tree for ambiguous extensions
-//! 3. Integrate into language detection pipeline
+    writeln!(code, "        {label}: &[")?;
+    for pattern in patterns {
+        writeln!(
+            code,
+            "            \"{}\",",
+            escape_rust_string(pattern.as_str())
+        )?;
+    }
+    writeln!(code, "        ],")
+}
 
-/// Language detection heuristics (Phase 3)
-/// Maps file extensions to detection patterns
-pub const LANGUAGE_DETECTION_HEURISTICS: &[(&str, &[&str])] = &[
-",
-    );
+/// Generate the Phase 3 (heuristics) Rust source.
+///
+/// # Errors
+///
+/// Returns an error if writing into the string buffer fails.
+fn generate_heuristics_code(heuristics: &HeuristicsFile) -> Result<String> {
+    let mut code = String::new();
+    write_heuristics_header(&mut code)?;
+    write_named_patterns_section(&mut code, heuristics)?;
+    write_disambiguations_section(&mut code, heuristics)?;
+    Ok(code)
+}
 
-    let mut sorted_exts: Vec<_> = heuristics.keys().collect();
-    sorted_exts.sort();
+/// Write the documentation banner and helper structs for the heuristics file.
+///
+/// # Errors
+///
+/// Returns an error if writing into the string buffer fails.
+fn write_heuristics_header(code: &mut String) -> fmt::Result {
+    writeln!(
+        code,
+        "// AUTO-GENERATED FILE - DO NOT EDIT MANUALLY\n\
+         // Generated from GitHub Linguist heuristics.yml\n\
+         // Run: cargo run --bin sync-linguist --features sync-tool\n\
+         \n\
+         //! Auto-generated language detection heuristics sourced from GitHub Linguist.\n\
+         //! The data model mirrors Linguist's disambiguation rules so downstream consumers\n\
+         //! can evaluate ambiguous extensions without depending on Linguist directly.\n\
+         \n\
+         #[derive(Debug)]\n\
+         pub struct HeuristicRuleCondition {{\n\
+             pub patterns: &'static [&'static str],\n\
+             pub named_pattern: Option<&'static str>,\n\
+             pub negative_patterns: &'static [&'static str],\n\
+         }}\n\
+         \n\
+         #[derive(Debug)]\n\
+         pub struct HeuristicRule {{\n\
+             pub language: &'static str,\n\
+             pub patterns: &'static [&'static str],\n\
+             pub named_pattern: Option<&'static str>,\n\
+             pub negative_patterns: &'static [&'static str],\n\
+             pub and: &'static [HeuristicRuleCondition],\n\
+         }}\n\
+         \n\
+         #[derive(Debug)]\n\
+         pub struct HeuristicEntry {{\n\
+             pub extensions: &'static [&'static str],\n\
+             pub rules: &'static [HeuristicRule],\n\
+         }}\n"
+    )
+}
 
-    for ext in sorted_exts {
-        if let Some(patterns) = heuristics.get(ext) {
-            code.push_str(&format!("    (\"{}\", &[\n", ext));
-            for pattern in patterns.iter().take(5) {
-                // Limit to 5 patterns per extension
-                let escaped = pattern.replace('\\', "\\\\").replace('"', "\\\"");
-                code.push_str(&format!("        \"{}\",\n", escaped));
+/// Write the named pattern lookup table to the generated source.
+///
+/// # Errors
+///
+/// Returns an error if writing into the string buffer fails.
+fn write_named_patterns_section(code: &mut String, heuristics: &HeuristicsFile) -> fmt::Result {
+    writeln!(
+        code,
+        "/// Named pattern definitions provided by GitHub Linguist.\n\
+         pub const NAMED_HEURISTIC_PATTERNS: &[(&str, &[&str])] = &["
+    )?;
+
+    for (name, patterns) in &heuristics.named_patterns {
+        writeln!(code, "    (\"{}\", &[", escape_rust_string(name.as_str()))?;
+        for pattern in patterns.as_slice() {
+            writeln!(
+                code,
+                "        \"{}\",",
+                escape_rust_string(pattern.as_str())
+            )?;
+        }
+        writeln!(code, "    ]),")?;
+    }
+
+    writeln!(code, "];\n")
+}
+
+/// Write the heuristics grouped by ambiguous extensions.
+///
+/// # Errors
+///
+/// Returns an error if writing into the string buffer fails.
+fn write_disambiguations_section(code: &mut String, heuristics: &HeuristicsFile) -> fmt::Result {
+    writeln!(
+        code,
+        "/// Disambiguation heuristics grouped by ambiguous extension.\n\
+         pub const LANGUAGE_DETECTION_HEURISTICS: &[HeuristicEntry] = &["
+    )?;
+
+    for disamb in &heuristics.disambiguations {
+        let mut sorted_exts: Vec<_> = disamb.extensions.iter().map(String::as_str).collect();
+        sorted_exts.sort_unstable();
+
+        writeln!(code, "    HeuristicEntry {{")?;
+        writeln!(code, "        extensions: &[")?;
+        for ext in sorted_exts {
+            writeln!(code, "            \"{}\",", escape_rust_string(ext))?;
+        }
+        writeln!(code, "        ],")?;
+
+        write_rules_section(code, &disamb.rules)?;
+        writeln!(code, "    }},")?;
+    }
+
+    writeln!(code, "];")
+}
+
+/// Write the rule list for a particular ambiguous extension group.
+///
+/// # Errors
+///
+/// Returns an error if writing into the string buffer fails.
+fn write_rules_section(code: &mut String, rules: &[Rule]) -> fmt::Result {
+    writeln!(code, "        rules: &[")?;
+    for rule in rules {
+        for language in &rule.language {
+            writeln!(code, "            HeuristicRule {{")?;
+            writeln!(
+                code,
+                "                language: \"{}\",",
+                escape_rust_string(language)
+            )?;
+
+            let patterns: Vec<String> = rule
+                .pattern
+                .as_ref()
+                .map_or_else(Vec::new, |list| list.as_slice().to_vec());
+            push_pattern_slice(code, "                patterns", &patterns)?;
+
+            if let Some(name) = rule.named_pattern.as_ref() {
+                writeln!(
+                    code,
+                    "                named_pattern: Some(\"{}\"),",
+                    escape_rust_string(name)
+                )?;
+            } else {
+                writeln!(code, "                named_pattern: None,")?;
             }
-            code.push_str("    ]),\n");
+
+            let negative_patterns: Vec<String> = rule
+                .negative_pattern
+                .as_ref()
+                .map_or_else(Vec::new, |list| list.as_slice().to_vec());
+            push_pattern_slice(
+                code,
+                "                negative_patterns",
+                &negative_patterns,
+            )?;
+
+            write_rule_conditions(code, &rule.and)?;
+            writeln!(code, "            }},")?;
+        }
+    }
+    writeln!(code, "        ],")
+}
+
+/// Write nested rule conditions representing logical AND clauses.
+///
+/// # Errors
+///
+/// Returns an error if writing into the string buffer fails.
+fn write_rule_conditions(code: &mut String, conditions: &[RuleCondition]) -> fmt::Result {
+    if conditions.is_empty() {
+        return writeln!(code, "                and: &[],");
+    }
+
+    writeln!(code, "                and: &[")?;
+    for condition in conditions {
+        writeln!(code, "                    HeuristicRuleCondition {{")?;
+
+        let condition_patterns: Vec<String> = condition
+            .pattern
+            .as_ref()
+            .map_or_else(Vec::new, |list| list.as_slice().to_vec());
+        push_pattern_slice(
+            code,
+            "                        patterns",
+            &condition_patterns,
+        )?;
+
+        if let Some(name) = condition.named_pattern.as_ref() {
+            writeln!(
+                code,
+                "                        named_pattern: Some(\"{}\"),",
+                escape_rust_string(name)
+            )?;
+        } else {
+            writeln!(code, "                        named_pattern: None,")?;
+        }
+
+        let condition_negative_patterns: Vec<String> = condition
+            .negative_pattern
+            .as_ref()
+            .map_or_else(Vec::new, |list| list.as_slice().to_vec());
+        push_pattern_slice(
+            code,
+            "                        negative_patterns",
+            &condition_negative_patterns,
+        )?;
+
+        writeln!(code, "                    }},")?;
+    }
+    writeln!(code, "                ],")
+}
+
+/// Persist generated source to disk, creating parent directories on demand.
+///
+/// # Errors
+///
+/// Returns an error when filesystem calls fail.
+fn write_to_file(path: &Path, contents: &str) -> Result<()> {
+    if path
+        .parent()
+        .is_some_and(|parent| parent != Path::new(".") && !parent.exists())
+    {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).with_context(|| {
+                format!("Failed to create parent directory for {}", path.display())
+            })?;
         }
     }
 
-    code.push_str("];\n");
-    code
+    fs::write(path, contents).with_context(|| format!("Failed to write {}", path.display()))?;
+    Ok(())
 }
 
-/// Main entry point
+/// Entry point for the sync utility.
+///
+/// # Errors
+///
+/// Propagates HTTP, parsing, and filesystem errors.
+///
+/// # Panics
+///
+/// Panics only if `StringList` encounters an unexpected variant (which should be
+/// impossible with the current serde definitions).
 #[tokio::main]
 async fn main() -> Result<()> {
-    eprintln!("🚀 Syncing patterns from GitHub Linguist...\n");
+    if env_logger::builder()
+        .format_timestamp(None)
+        .format_target(false)
+        .try_init()
+        .is_err()
+    {
+        // Already initialized elsewhere; nothing to do.
+    }
 
-    // Fetch files
+    info!("🚀 Syncing patterns from GitHub Linguist…");
+
     let vendor_content = fetch_url(VENDOR_YML_URL).await?;
     let generated_content = fetch_url(GENERATED_RB_URL).await?;
     let heuristics_content = fetch_url(HEURISTICS_YML_URL).await?;
 
-    eprintln!("\n⚙️  Parsing patterns...\n");
+    info!("⚙️  Parsing vendor patterns…");
+    let vendor_patterns = parse_vendor_yml(&vendor_content)?;
+    info!("   → {} vendored patterns", vendor_patterns.len());
 
-    // Parse Phase 2 patterns
-    let vendor_patterns = parse_vendor_yml(&vendor_content);
-    let generated_patterns = parse_generated_rb(&generated_content);
-
-    eprintln!("Found {} vendor patterns", vendor_patterns.len());
-    eprintln!("Found {} generated patterns", generated_patterns.len());
-
-    let all_patterns = vendor_patterns
-        .union(&generated_patterns)
-        .cloned()
-        .collect();
-    let (vendored, generated, binary) = categorize_patterns(&all_patterns);
-
-    eprintln!(
-        "Categorized: {} vendored, {} generated, {} binary\n",
-        vendored.len(),
+    info!("⚙️  Parsing generated patterns…");
+    let generated_patterns = parse_generated_rb(&generated_content)?;
+    let (generated, binary) = split_generated_patterns(&generated_patterns);
+    info!(
+        "   → {} generated patterns ({} binary extensions)",
         generated.len(),
         binary.len()
     );
 
-    // Parse Phase 3 heuristics
-    let heuristics = parse_heuristics_yml(&heuristics_content);
-    eprintln!(
-        "Found {} language detection heuristics (Phase 3)\n",
-        heuristics.len()
+    info!("⚙️  Parsing heuristics…");
+    let heuristics = parse_heuristics_yml(&heuristics_content)?;
+    info!(
+        "   → {} disambiguation groups, {} named patterns",
+        heuristics.disambiguations.len(),
+        heuristics.named_patterns.len()
     );
 
-    // Generate code
-    eprintln!("💾 Generating Rust code...\n");
+    info!("💾 Generating Rust source files…");
+    let file_classifier_code =
+        generate_file_classifier_code(&vendor_patterns, &generated, &binary)?;
+    let heuristics_code = generate_heuristics_code(&heuristics)?;
 
-    let file_classifier_code = generate_file_classifier_code(&vendored, &generated, &binary);
-    let heuristics_code = generate_heuristics_code(&heuristics);
+    write_to_file(Path::new(FILE_CLASSIFIER_PATH), &file_classifier_code)?;
+    write_to_file(Path::new(HEURISTICS_PATH), &heuristics_code)?;
 
-    // Output Phase 2
-    println!("{}", file_classifier_code);
-    eprintln!("✅ Generated file classifier patterns (Phase 2)");
-
-    // Output Phase 3 to stderr (user will redirect)
-    eprintln!("\n{}", heuristics_code);
-    eprintln!("✅ Generated language detection heuristics (Phase 3)");
-
-    eprintln!("\n📍 Complete! Patterns synced from GitHub Linguist");
-    eprintln!("   Phase 2: File classification");
-    eprintln!("   Phase 3: Language detection heuristics");
+    info!("✅ Wrote {}", PathBuf::from(FILE_CLASSIFIER_PATH).display());
+    info!("✅ Wrote {}", PathBuf::from(HEURISTICS_PATH).display());
+    info!("📍 Sync complete!");
 
     Ok(())
 }

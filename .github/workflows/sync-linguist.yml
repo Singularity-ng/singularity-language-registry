@@ -62,8 +62,8 @@ jobs:
         if: steps.check-renovate.outputs.is_renovate == 'true'
         run: |
           echo "🚀 Syncing patterns from GitHub Linguist..."
-          cargo run --bin sync-linguist --features sync-tool > src/file_classifier_generated.rs 2>&1
-          echo "✅ Patterns synced to src/file_classifier_generated.rs"
+          cargo run --bin sync-linguist --features sync-tool
+          echo "✅ Patterns synced to src/file_classifier_generated.rs and src/heuristics_generated.rs"
 
       - name: Run tests to validate patterns
         if: steps.check-renovate.outputs.is_renovate == 'true'
@@ -78,7 +78,7 @@ jobs:
         uses: EndBug/add-and-commit@v9
         with:
           message: 'chore(linguist): sync Phase 2 & 3 patterns from GitHub Linguist'
-          add: 'src/file_classifier_generated.rs'
+          add: 'src/file_classifier_generated.rs src/heuristics_generated.rs'
           default_author: github_actions
           push: true
 
@@ -97,7 +97,9 @@ This Renovate PR for GitHub Linguist has been processed:
 - Phase 2: File classification patterns (vendor, generated, binary)
 - Phase 3: Language detection heuristics (ambiguous extensions)
 
-The auto-generated patterns have been committed to \`src/file_classifier_generated.rs\`.
+The auto-generated patterns have been committed to:
+- \`src/file_classifier_generated.rs\`
+- \`src/heuristics_generated.rs\`
 
 ## What was synced
 - **Vendored** code paths from \`vendor.yml\`
@@ -135,7 +137,7 @@ This may be due to:
 \`\`\`bash
 just sync-linguist
 cargo test
-git add src/file_classifier_generated.rs
+git add src/file_classifier_generated.rs src/heuristics_generated.rs
 git commit -m "chore(linguist): sync patterns"
 git push
 \`\`\``
