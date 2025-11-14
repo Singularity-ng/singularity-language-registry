@@ -1,8 +1,11 @@
 //! Synchronize file classification and language detection patterns from GitHub Linguist.
 //!
-//! Phase 2 (file classification) and Phase 3 (heuristics) are written directly to the
-//! crate's `src/` directory. Run with:
-//! `cargo run --bin sync-linguist --features sync-tool`
+//! Generates and syncs multiple phases:
+//! - Phase 2: File classification (vendor, generated, binary patterns)
+//! - Phase 3: Language detection heuristics (ambiguous extension resolution)
+//! - Phase 4: Language metadata (extensions, colors, interpreters, editor modes)
+//!
+//! Run with: `cargo run --bin sync-linguist --features sync-tool`
 
 use anyhow::{Context, Result};
 use log::info;
@@ -23,9 +26,13 @@ const GENERATED_RB_URL: &str =
     "https://raw.githubusercontent.com/github-linguist/linguist/master/lib/linguist/generated.rb";
 const HEURISTICS_YML_URL: &str =
     "https://raw.githubusercontent.com/github-linguist/linguist/master/lib/linguist/heuristics.yml";
+const LANGUAGES_YML_URL: &str =
+    "https://raw.githubusercontent.com/github-linguist/linguist/master/lib/linguist/languages.yml";
 
 const FILE_CLASSIFIER_PATH: &str = "src/file_classifier_generated.rs";
 const HEURISTICS_PATH: &str = "src/heuristics_generated.rs";
+const LANGUAGES_METADATA_PATH: &str = "src/languages_metadata_generated.rs";
+const LANGUAGES_YML_OUTPUT_PATH: &str = ".github/linguist/languages.yml";
 
 #[derive(Debug, Deserialize)]
 struct HeuristicsFile {
@@ -86,6 +93,39 @@ impl StringList {
             Self::Multiple(values) => values.as_slice(),
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(clippy::struct_field_names, reason = "Field names match Linguist's schema")]
+struct Language {
+    #[serde(rename = "type")]
+    language_type: String,
+    #[serde(default)]
+    color: Option<String>,
+    #[serde(default)]
+    extensions: Vec<String>,
+    #[serde(default)]
+    aliases: Vec<String>,
+    #[serde(default)]
+    interpreters: Vec<String>,
+    #[serde(default)]
+    filenames: Vec<String>,
+    #[serde(default)]
+    ace_mode: Option<String>,
+    #[serde(default)]
+    tm_scope: Option<String>,
+    #[serde(default)]
+    language_id: Option<i64>,
+    #[serde(default)]
+    codemirror_mode: Option<String>,
+    #[serde(default)]
+    codemirror_mime_type: Option<String>,
+    #[serde(default)]
+    group: Option<String>,
+    #[serde(default)]
+    wrap: Option<bool>,
+    #[serde(default)]
+    fs_name: Option<String>,
 }
 
 /// Deserialize either a single string or a list of strings into a `Vec<String>`.
@@ -513,6 +553,177 @@ fn write_rule_conditions(code: &mut String, conditions: &[RuleCondition]) -> fmt
     writeln!(code, "                ],")
 }
 
+/// Generate Rust code for language metadata from languages.yml.
+///
+/// # Errors
+///
+/// Returns an error if the generated code cannot be written to the string buffer.
+#[allow(
+    clippy::too_many_lines,
+    reason = "Code generation function necessarily iterates all metadata fields"
+)]
+#[allow(
+    clippy::pattern_type_mismatch,
+    reason = "Matching against &Option is clearer than dereferencing"
+)]
+fn generate_languages_metadata_code(languages: &BTreeMap<String, Language>) -> Result<String> {
+    let mut code = String::new();
+
+    writeln!(
+        code,
+        "// AUTO-GENERATED FILE - DO NOT EDIT MANUALLY\n\
+         // Generated from GitHub Linguist languages.yml\n\
+         // Run: cargo run --bin sync-linguist --features sync-tool\n\
+         \n\
+         //! Auto-generated language metadata from GitHub Linguist.\n\
+         //! Contains comprehensive language definitions including extensions,\n\
+         //! colors, interpreters, and editor modes.\n\
+         \n\
+         #[derive(Debug, Clone)]\n\
+         pub struct LanguageMetadata {{\n\
+             pub name: &'static str,\n\
+             pub language_type: &'static str,\n\
+             pub color: Option<&'static str>,\n\
+             pub extensions: &'static [&'static str],\n\
+             pub aliases: &'static [&'static str],\n\
+             pub interpreters: &'static [&'static str],\n\
+             pub filenames: &'static [&'static str],\n\
+             pub ace_mode: Option<&'static str>,\n\
+             pub tm_scope: Option<&'static str>,\n\
+             pub language_id: Option<i64>,\n\
+             pub codemirror_mode: Option<&'static str>,\n\
+             pub codemirror_mime_type: Option<&'static str>,\n\
+             pub group: Option<&'static str>,\n\
+             pub wrap: Option<bool>,\n\
+             pub fs_name: Option<&'static str>,\n\
+         }}\n\
+         \n\
+         /// All language definitions from GitHub Linguist.\n\
+         pub const LANGUAGES: &[LanguageMetadata] = &["
+    )?;
+
+    for (name, lang) in languages {
+        writeln!(code, "    LanguageMetadata {{")?;
+        writeln!(code, "        name: \"{}\",", escape_rust_string(name))?;
+        writeln!(
+            code,
+            "        language_type: \"{}\",",
+            escape_rust_string(&lang.language_type)
+        )?;
+
+        if let Some(color) = &lang.color {
+            writeln!(
+                code,
+                "        color: Some(\"{}\"),",
+                escape_rust_string(color)
+            )?;
+        } else {
+            writeln!(code, "        color: None,")?;
+        }
+
+        writeln!(code, "        extensions: &[")?;
+        for ext in &lang.extensions {
+            writeln!(code, "            \"{}\",", escape_rust_string(ext))?;
+        }
+        writeln!(code, "        ],")?;
+
+        writeln!(code, "        aliases: &[")?;
+        for alias in &lang.aliases {
+            writeln!(code, "            \"{}\",", escape_rust_string(alias))?;
+        }
+        writeln!(code, "        ],")?;
+
+        writeln!(code, "        interpreters: &[")?;
+        for interp in &lang.interpreters {
+            writeln!(code, "            \"{}\",", escape_rust_string(interp))?;
+        }
+        writeln!(code, "        ],")?;
+
+        writeln!(code, "        filenames: &[")?;
+        for filename in &lang.filenames {
+            writeln!(code, "            \"{}\",", escape_rust_string(filename))?;
+        }
+        writeln!(code, "        ],")?;
+
+        if let Some(ace_mode) = &lang.ace_mode {
+            writeln!(
+                code,
+                "        ace_mode: Some(\"{}\"),",
+                escape_rust_string(ace_mode)
+            )?;
+        } else {
+            writeln!(code, "        ace_mode: None,")?;
+        }
+
+        if let Some(tm_scope) = &lang.tm_scope {
+            writeln!(
+                code,
+                "        tm_scope: Some(\"{}\"),",
+                escape_rust_string(tm_scope)
+            )?;
+        } else {
+            writeln!(code, "        tm_scope: None,")?;
+        }
+
+        if let Some(id) = lang.language_id {
+            writeln!(code, "        language_id: Some({id}),")?;
+        } else {
+            writeln!(code, "        language_id: None,")?;
+        }
+
+        if let Some(mode) = &lang.codemirror_mode {
+            writeln!(
+                code,
+                "        codemirror_mode: Some(\"{}\"),",
+                escape_rust_string(mode)
+            )?;
+        } else {
+            writeln!(code, "        codemirror_mode: None,")?;
+        }
+
+        if let Some(mime) = &lang.codemirror_mime_type {
+            writeln!(
+                code,
+                "        codemirror_mime_type: Some(\"{}\"),",
+                escape_rust_string(mime)
+            )?;
+        } else {
+            writeln!(code, "        codemirror_mime_type: None,")?;
+        }
+
+        if let Some(group) = &lang.group {
+            writeln!(
+                code,
+                "        group: Some(\"{}\"),",
+                escape_rust_string(group)
+            )?;
+        } else {
+            writeln!(code, "        group: None,")?;
+        }
+
+        if let Some(wrap) = lang.wrap {
+            writeln!(code, "        wrap: Some({wrap}),")?;
+        } else {
+            writeln!(code, "        wrap: None,")?;
+        }
+
+        if let Some(fs_name) = &lang.fs_name {
+            writeln!(
+                code,
+                "        fs_name: Some(\"{}\"),",
+                escape_rust_string(fs_name)
+            )?;
+        } else {
+            writeln!(code, "        fs_name: None,")?;
+        }
+
+        writeln!(code, "    }},")?;
+    }
+
+    writeln!(code, "];")?;
+    Ok(code)
+}
+
 /// Persist generated source to disk, creating parent directories on demand.
 ///
 /// # Errors
@@ -544,6 +755,7 @@ fn write_to_file(path: &Path, contents: &str) -> Result<()> {
 ///
 /// Panics only if `StringList` encounters an unexpected variant (which should be
 /// impossible with the current serde definitions).
+#[allow(clippy::too_many_lines, reason = "Main function orchestrates multiple sync phases")]
 #[tokio::main]
 async fn main() -> Result<()> {
     if env_logger::builder()
@@ -560,6 +772,7 @@ async fn main() -> Result<()> {
     let vendor_content = fetch_url(VENDOR_YML_URL).await?;
     let generated_content = fetch_url(GENERATED_RB_URL).await?;
     let heuristics_content = fetch_url(HEURISTICS_YML_URL).await?;
+    let languages_content = fetch_url(LANGUAGES_YML_URL).await?;
 
     info!("⚙️  Parsing vendor patterns…");
     let vendor_patterns = parse_vendor_yml(&vendor_content)?;
@@ -582,16 +795,32 @@ async fn main() -> Result<()> {
         heuristics.named_patterns.len()
     );
 
+    info!("⚙️  Parsing languages metadata…");
+    let languages: BTreeMap<String, Language> =
+        serde_yaml::from_str(&languages_content).context("Failed to parse languages.yml")?;
+    info!("   → {} languages", languages.len());
+
     info!("💾 Generating Rust source files…");
     let file_classifier_code =
         generate_file_classifier_code(&vendor_patterns, &generated, &binary)?;
     let heuristics_code = generate_heuristics_code(&heuristics)?;
+    let languages_code = generate_languages_metadata_code(&languages)?;
 
     write_to_file(Path::new(FILE_CLASSIFIER_PATH), &file_classifier_code)?;
     write_to_file(Path::new(HEURISTICS_PATH), &heuristics_code)?;
+    write_to_file(Path::new(LANGUAGES_METADATA_PATH), &languages_code)?;
+    write_to_file(Path::new(LANGUAGES_YML_OUTPUT_PATH), &languages_content)?;
 
     info!("✅ Wrote {}", PathBuf::from(FILE_CLASSIFIER_PATH).display());
     info!("✅ Wrote {}", PathBuf::from(HEURISTICS_PATH).display());
+    info!(
+        "✅ Wrote {}",
+        PathBuf::from(LANGUAGES_METADATA_PATH).display()
+    );
+    info!(
+        "✅ Wrote {}",
+        PathBuf::from(LANGUAGES_YML_OUTPUT_PATH).display()
+    );
     info!("📍 Sync complete!");
 
     Ok(())

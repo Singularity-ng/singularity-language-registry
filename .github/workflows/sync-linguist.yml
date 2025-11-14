@@ -58,12 +58,12 @@ jobs:
             echo "is_linguist=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Sync Linguist patterns (Phase 2 & 3)
+      - name: Sync Linguist patterns (Phase 2, 3, 4)
         if: steps.check-renovate.outputs.is_renovate == 'true'
         run: |
           echo "🚀 Syncing patterns from GitHub Linguist..."
           cargo run --bin sync-linguist --features sync-tool
-          echo "✅ Patterns synced to src/file_classifier_generated.rs and src/heuristics_generated.rs"
+          echo "✅ All patterns and metadata synced"
 
       - name: Run tests to validate patterns
         if: steps.check-renovate.outputs.is_renovate == 'true'
@@ -77,8 +77,8 @@ jobs:
         if: steps.check-renovate.outputs.is_renovate == 'true'
         uses: EndBug/add-and-commit@v9
         with:
-          message: 'chore(linguist): sync Phase 2 & 3 patterns from GitHub Linguist'
-          add: 'src/file_classifier_generated.rs src/heuristics_generated.rs'
+          message: 'chore(linguist): sync Phase 2, 3 & 4 patterns from GitHub Linguist'
+          add: 'src/file_classifier_generated.rs src/heuristics_generated.rs src/languages_metadata_generated.rs .github/linguist/languages.yml'
           default_author: github_actions
           push: true
 
@@ -96,15 +96,19 @@ jobs:
 This Renovate PR for GitHub Linguist has been processed:
 - Phase 2: File classification patterns (vendor, generated, binary)
 - Phase 3: Language detection heuristics (ambiguous extensions)
+- Phase 4: Language metadata (extensions, colors, interpreters, etc.)
 
 The auto-generated patterns have been committed to:
 - \`src/file_classifier_generated.rs\`
 - \`src/heuristics_generated.rs\`
+- \`src/languages_metadata_generated.rs\`
+- \`.github/linguist/languages.yml\`
 
 ## What was synced
 - **Vendored** code paths from \`vendor.yml\`
 - **Generated** file patterns from \`generated.rb\`
 - **Language detection** heuristics from \`heuristics.yml\`
+- **Language metadata** (789 languages) from \`languages.yml\`
 
 ## Next steps
 1. Review the changes
@@ -137,7 +141,7 @@ This may be due to:
 \`\`\`bash
 just sync-linguist
 cargo test
-git add src/file_classifier_generated.rs src/heuristics_generated.rs
+git add src/file_classifier_generated.rs src/heuristics_generated.rs src/languages_metadata_generated.rs .github/linguist/languages.yml
 git commit -m "chore(linguist): sync patterns"
 git push
 \`\`\``
