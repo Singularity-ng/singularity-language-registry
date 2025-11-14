@@ -1,0 +1,148 @@
+name: Sync GitHub Linguist Patterns
+
+on:
+  # Trigger on Renovate PRs for Linguist updates
+  pull_request:
+    paths:
+      - 'renovate.json5'
+
+jobs:
+  sync-patterns:
+    name: Sync Phase 2 & 3 Patterns from GitHub Linguist
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check if PR is from Renovate and is for Linguist
+        id: check-renovate
+        run: |
+          # Check if this is a Renovate PR
+          if [[ "${{ github.head_ref }}" == renovate/* ]]; then
+            echo "is_renovate=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_renovate=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Check if it's related to Linguist
+          if grep -q "github-linguist/linguist" <<< "${{ github.event.pull_request.body }}"; then
+            echo "is_linguist=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_linguist=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Sync Linguist patterns (Phase 2, 3, 4)
+        if: steps.check-renovate.outputs.is_renovate == 'true'
+        run: |
+          echo "🚀 Syncing patterns from GitHub Linguist..."
+          cargo run --bin sync-linguist --features sync-tool
+          echo "✅ All patterns and metadata synced"
+
+      - name: Run tests to validate patterns
+        if: steps.check-renovate.outputs.is_renovate == 'true'
+        run: cargo test --all-features
+
+      - name: Format code
+        if: steps.check-renovate.outputs.is_renovate == 'true'
+        run: cargo fmt
+
+      - name: Commit changes if patterns were updated
+        if: steps.check-renovate.outputs.is_renovate == 'true'
+        uses: EndBug/add-and-commit@v9
+        with:
+          message: 'chore(linguist): sync Phase 2, 3 & 4 patterns from GitHub Linguist'
+          add: 'src/file_classifier_generated.rs src/heuristics_generated.rs src/languages_metadata_generated.rs .github/linguist/languages.yml'
+          default_author: github_actions
+          push: true
+
+      - name: Comment on PR with sync summary
+        if: steps.check-renovate.outputs.is_renovate == 'true' && success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `✅ **Linguist Sync Complete**
+
+This Renovate PR for GitHub Linguist has been processed:
+- Phase 2: File classification patterns (vendor, generated, binary)
+- Phase 3: Language detection heuristics (ambiguous extensions)
+- Phase 4: Language metadata (extensions, colors, interpreters, etc.)
+
+The auto-generated patterns have been committed to:
+- \`src/file_classifier_generated.rs\`
+- \`src/heuristics_generated.rs\`
+- \`src/languages_metadata_generated.rs\`
+- \`.github/linguist/languages.yml\`
+
+## What was synced
+- **Vendored** code paths from \`vendor.yml\`
+- **Generated** file patterns from \`generated.rb\`
+- **Language detection** heuristics from \`heuristics.yml\`
+- **Language metadata** (789 languages) from \`languages.yml\`
+
+## Next steps
+1. Review the changes
+2. The CI checks should pass automatically
+3. Merge when ready
+4. New release will include updated Linguist patterns
+
+**Note**: This is an automated sync. Manual review recommended before merge.`
+            })
+
+      - name: Report sync errors
+        if: steps.check-renovate.outputs.is_renovate == 'true' && failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `❌ **Linguist Sync Failed**
+
+The automated sync from GitHub Linguist encountered an error.
+
+This may be due to:
+- Network connectivity issues
+- Changes in Linguist's file format
+- GitHub rate limiting
+
+**Action Required**: Manual sync needed
+\`\`\`bash
+just sync-linguist
+cargo test
+git add src/file_classifier_generated.rs src/heuristics_generated.rs src/languages_metadata_generated.rs .github/linguist/languages.yml
+git commit -m "chore(linguist): sync patterns"
+git push
+\`\`\``
+            })

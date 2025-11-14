@@ -1,0 +1,43 @@
+name: Validate Linguist Snapshot
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  validate-snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Build linguist_to_snapshot tool
+        run: |
+          cargo build --release -p linguist_to_snapshot
+
+      - name: Generate snapshot from PR-provided linguist (if present)
+        run: |
+          # assume repo may include languages.yml at .github/linguist/languages.yml
+          INPUT=.github/linguist/languages.yml
+          OUT=target/generated_snapshot.json
+          if [ -f "$INPUT" ]; then
+            ./target/release/linguist_to_snapshot --input "$INPUT" --output "$OUT"
+          else
+            echo "No languages.yml found in PR; skipping snapshot generation"
+          fi
+
+      - name: Run tests using generated snapshot if present
+        run: |
+          if [ -f target/generated_snapshot.json ]; then
+            export SINGULARITY_LANGUAGE_SNAPSHOT=$(pwd)/target/generated_snapshot.json
+            cargo test -p singularity-language-registry
+          else
+            echo "No generated snapshot; running tests that use the test fixture"
+            cargo test -p singularity-language-registry
+          fi

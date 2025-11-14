@@ -43,6 +43,66 @@
   // Package Rules - ordered by priority
   "packageRules": [
     // ===================
+    // GitHub Linguist (Language Registry Source)
+    // ===================
+    {
+      "description": "🔤 GitHub Linguist language list updates",
+      "matchDatasources": ["github-tags"],
+      "matchPackagePatterns": ["github-linguist/linguist"],
+      "schedule": ["weekly"],
+      "labels": ["linguist", "language-registry", "dependencies"],
+      "prPriority": 5,
+      "automerge": false,  // Manual review for language definition changes
+      "commitMessagePrefix": "chore(linguist):",
+      "prBodyNotes": [
+        "## 🤖 Linguist Update - Automated Sync in Progress",
+        "",
+        "GitHub Linguist (the authoritative source) has been updated.",
+        "",
+        "### ✅ Automated Workflow Active",
+        "",
+        "A GitHub Actions workflow is automatically syncing patterns:",
+        "- **Phase 2**: File classification (vendor, generated, binary)",
+        "- **Phase 3**: Language detection heuristics",
+        "",
+        "The workflow will:",
+        "1. Download patterns from GitHub Linguist",
+        "2. Parse vendor.yml, generated.rb, heuristics.yml",
+        "3. Auto-generate `src/file_classifier_generated.rs`",
+        "4. Run `cargo test` to validate",
+        "5. Commit changes automatically",
+        "",
+        "### 👀 What You Should Review",
+        "",
+        "**Phase 1: Language Definitions**",
+        "- Any new languages added to Linguist?",
+        "- Language metadata changes?",
+        "- Do we need to update `supported_in_singularity` flags?",
+        "",
+        "**Phase 2 & 3: File Classification + Heuristics**",
+        "- Auto-synced and committed by workflow ✅",
+        "- Review changes in `src/file_classifier_generated.rs`",
+        "- Verify CI checks pass",
+        "",
+        "### 🚀 Next Steps",
+        "",
+        "1. **Wait** for the workflow to complete (1-2 minutes)",
+        "2. **Review** the auto-generated changes",
+        "3. **Check** CI status and test results",
+        "4. **Update** language support if needed (Phase 1)",
+        "5. **Merge** when ready - releases automatically include new patterns",
+        "",
+        "### 💡 Implementation Details",
+        "",
+        "**Tool**: 100% pure Rust (no Python/Perl/Bash)",
+        "**Location**: `tools/linguist_sync.rs`",
+        "**Features**: All 3 phases implemented",
+        "",
+        "See [LINGUIST_INTEGRATION.md](LINGUIST_INTEGRATION.md) for complete details."
+      ]
+    },
+
+    // ===================
     // Security Updates
     // ===================
     {

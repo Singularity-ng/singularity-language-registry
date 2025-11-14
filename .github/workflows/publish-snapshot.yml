@@ -1,0 +1,92 @@
+name: Publish canonical snapshot
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  publish-snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Build linguist_to_snapshot
+        run: |
+          cargo build --release -p linguist_to_snapshot
+
+      - name: Generate canonical snapshot and open PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          INPUT=.github/linguist/languages.yml
+          OUT=canonical/snapshot.json
+
+          if [ ! -f "$INPUT" ]; then
+            echo "No $INPUT file in repo; skipping snapshot publish"
+            exit 0
+          fi
+
+          mkdir -p canonical
+          # Use the robust wrapper which will run the built converter if present,
+          # or fall back to `cargo run` to execute the converter. This makes the
+          # job resilient in CI or Renovate environments.
+          cargo run --manifest-path tools/generate_snapshot_job/Cargo.toml -- --output "$OUT"
+
+          # Configure git user
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Leave the changes uncommitted; the `create-pull-request` action
+          # will create a branch, commit the snapshot, and open a PR. This
+          # avoids needing to push branches from the workflow runner and is
+          # more robust in GitHub Actions environments.
+          git add "$OUT"
+          if git diff --staged --quiet; then
+            echo "Snapshot unchanged; nothing to commit"
+            exit 0
+          fi
+
+      - name: Validate generated snapshot JSON
+        run: |
+          set -euo pipefail
+          OUT=canonical/snapshot.json
+          if [ ! -f "$OUT" ]; then
+            echo "No generated snapshot found at $OUT"
+            exit 1
+          fi
+          # quick sanity checks: is valid JSON and top-level array
+          if ! jq -e 'type == "array"' "$OUT" >/dev/null; then
+            echo "$OUT is not a JSON array"
+            jq . "$OUT" || true
+            exit 1
+          fi
+          # ensure every object has non-empty string id and name fields
+          if ! jq -e 'all(.[]; (has("id") and has("name") and (.id|type=="string") and (.name|type=="string") and (.id != "") and (.name != "")))' "$OUT" >/dev/null; then
+            echo "Snapshot validation failed: one or more entries are missing required fields 'id' or 'name', or they are empty/non-string"
+            # Show up to first 5 offending entries
+            jq 'map(select( (has("id")|not) or (has("name")|not) or (.id|type!="string") or (.name|type!="string") or (.id=="") or (.name=="") )) | .[0:5]' "$OUT" || true
+            exit 1
+          fi
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(snapshot): update canonical snapshot"
+          title: "chore(snapshot): update canonical snapshot"
+          body: "Automated update of canonical snapshot generated from Linguist. Please review and merge."
+          labels: snapshot
+          branch: snapshot-update-${{ github.run_number }}
+          author: "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"

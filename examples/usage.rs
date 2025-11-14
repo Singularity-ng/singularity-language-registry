@@ -9,11 +9,13 @@
     reason = "Examples are meant to demonstrate usage and print output to the user"
 )]
 
+use std::sync::atomic::Ordering;
+
 use singularity_language_registry::{
     ast_grep_supported_languages, detect_from_content, detect_language, get_language,
-    get_language_by_alias, is_detectable, languages_by_families, rca_supported_languages,
-    recommended_linters, same_family, supported_languages, supports_feature, AnalysisFeature,
-    LanguageStats,
+    get_language_by_alias, is_detectable, languages_by_families, languages_with_capability,
+    rca_supported_languages, recommended_linters, same_family, set_language_capability,
+    supported_languages, supports_feature, AnalysisFeature, LanguageCapability, LanguageStats,
 };
 use std::path::Path;
 
@@ -41,8 +43,14 @@ fn main() {
     println!("\n2. Language Lookup:");
     if let Some(elixir) = get_language("elixir") {
         println!("  Elixir extensions: {:?}", elixir.extensions);
-        println!("  RCA supported: {}", elixir.rca_supported);
-        println!("  AST-Grep supported: {}", elixir.ast_grep_supported);
+        println!(
+            "  RCA supported: {}",
+            elixir.rca_supported.load(Ordering::Relaxed)
+        );
+        println!(
+            "  AST-Grep supported: {}",
+            elixir.ast_grep_supported.load(Ordering::Relaxed)
+        );
     }
 
     // 3. Alias lookup
@@ -136,6 +144,17 @@ fn main() {
     println!("\n13. AST-Grep Supported Languages:");
     let ast = ast_grep_supported_languages();
     println!("  AST-Grep supports {} languages", ast.len());
+
+    // 14. Capability registration
+    println!("\n14. Capability Registration:");
+    #[allow(
+        clippy::let_underscore_must_use,
+        clippy::let_underscore_untyped,
+        reason = "Example demonstrates capability registration"
+    )]
+    let _ = set_language_capability("rust", LanguageCapability::Linting, true);
+    let linting_langs = languages_with_capability(LanguageCapability::Linting);
+    println!("  Languages advertising linting: {}", linting_langs.len());
 
     println!("\n=== Examples Complete ===");
 }

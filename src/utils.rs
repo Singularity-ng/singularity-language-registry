@@ -2,6 +2,7 @@
 
 use crate::registry::{LanguageInfo, LANGUAGE_REGISTRY};
 use std::collections::HashMap;
+use std::sync::atomic::Ordering;
 
 /// Get all languages grouped by family
 pub fn languages_by_families() -> HashMap<String, Vec<&'static LanguageInfo>> {
@@ -37,8 +38,14 @@ impl LanguageStats {
 
         Self {
             total_languages: all.len(),
-            rca_supported: all.iter().filter(|l| l.rca_supported).count(),
-            ast_grep_supported: all.iter().filter(|l| l.ast_grep_supported).count(),
+            rca_supported: all
+                .iter()
+                .filter(|l| l.rca_supported.load(Ordering::Relaxed))
+                .count(),
+            ast_grep_supported: all
+                .iter()
+                .filter(|l| l.ast_grep_supported.load(Ordering::Relaxed))
+                .count(),
             compiled_languages: all.iter().filter(|l| l.is_compiled).count(),
             interpreted_languages: all.iter().filter(|l| !l.is_compiled).count(),
             families: families.len(),
@@ -114,8 +121,8 @@ pub fn supports_feature(language: &str, feature: AnalysisFeature) -> bool {
     };
 
     match feature {
-        AnalysisFeature::RCA => lang.rca_supported,
-        AnalysisFeature::ASTGrep => lang.ast_grep_supported,
+        AnalysisFeature::RCA => lang.rca_supported.load(Ordering::Relaxed),
+        AnalysisFeature::ASTGrep => lang.ast_grep_supported.load(Ordering::Relaxed),
         AnalysisFeature::TreeSitter => lang.tree_sitter_language.is_some(),
         AnalysisFeature::Complexity => {
             // Most compiled languages support complexity analysis

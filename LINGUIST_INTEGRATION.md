@@ -1,0 +1,278 @@
+# GitHub Linguist Integration
+
+## Overview
+
+Singularity's language registry is aligned with [GitHub Linguist](https://github.com/github-linguist/linguist) as the authoritative source for programming language definitions and file classification patterns.
+
+This ensures consistency across tools and prevents fragmentation of language definitions across the ecosystem.
+
+## Architecture
+
+```
+GitHub Linguist (Authoritative Source)
+    ↓
+Renovate (Weekly Updates)
+    ↓
+Singularity Language Registry
+    ├─ Language Definitions (Phase 1: DONE)
+    ├─ File Classification (Phase 2: READY)
+    └─ Detection Heuristics (Phase 3: PLANNED)
+    ↓
+All Singularity Engines
+```
+
+## Current State: Phase 1 - Language Definitions
+
+### What's Synced
+- **`languages.yml`**: Complete list of 500+ programming languages
+- **Metadata per language**: Extensions, aliases, MIME types, language type
+- **Linguist attributes**: Color codes, documentation references
+
+### How It Works
+```rust
+// All language definitions come from Linguist
+let registry = LanguageRegistry::new();
+
+// Only explicitly marked languages are supported
+if lang.supported_in_singularity {
+    // Analyze this language
+}
+```
+
+### Renovate Integration
+- **Schedule**: Weekly check for Linguist updates
+- **Label**: `linguist`, `language-registry`
+- **Action**: Manual review required before merge
+- **Update**: When Linguist releases a new version
+
+## Phase 2: File Classification + Phase 3: Language Detection (In Progress)
+
+### Status
+- ✅ **FileClassifier module**: Implemented with 5 tests
+- ✅ **Synchronization tool**: Full Rust implementation (`tools/linguist_sync.rs`)
+  - 100% pure Rust (no Python, Perl, or Bash)
+  - Downloads from GitHub Linguist
+  - Parses vendor.yml, generated.rb, heuristics.yml
+  - Auto-generates Rust code
+- ✅ **Integration**: `just sync-linguist` command added
+- ✅ **Phase 3**: Language detection heuristics parsing implemented
+- 📋 **Next**: CI/CD workflow integration
+
+### What Will Be Added
+
+#### Vendored Code Detection
+Auto-skip third-party dependencies:
+```
+- node_modules/
+- vendor/
+- .yarn/
+- Pods/
+- third_party/
+- Carthage/
+```
+
+#### Generated File Detection
+Skip auto-generated code:
+```
+- *.pb.rs (Protobuf)
+- *.pb.go (Protobuf)
+- *.generated.ts (GraphQL)
+- *.designer.cs (Visual Studio)
+- *.meta (Unity3D)
+```
+
+#### Binary File Detection
+Skip non-text files:
+```
+- *.png, *.jpg, *.gif (Images)
+- *.zip, *.tar (Archives)
+- *.exe, *.dll (Binaries)
+- *.pdf, *.docx (Documents)
+```
+
+### How It Works
+
+#### 100% Pure Rust Implementation
+No Python, Perl, or Bash dependencies. Everything runs in Rust.
+
+#### Step 1: Automatic Synchronization (via Justfile)
+When Linguist updates (Renovate alert):
+```bash
+# One command syncs Phases 2 & 3 from GitHub Linguist
+just sync-linguist
+
+# Under the hood:
+cargo run --bin sync-linguist --features sync-tool
+
+# Run tests to validate patterns
+cargo test
+
+# Commit the generated patterns
+git add src/file_classifier_generated.rs
+git commit -m "chore(linguist): sync Phase 2 & 3 patterns"
+```
+
+#### Step 2: Fully Automated (CI Integration - Future)
+```yaml
+# GitHub Actions example
+- name: Sync Linguist patterns
+  run: just sync-linguist
+
+- name: Run tests
+  run: cargo test
+
+- name: Commit if changed
+  run: |
+    git add src/file_classifier_generated.rs
+    git commit -m "chore(linguist): sync patterns" || true
+```
+
+### Implementation Details
+
+#### Synchronization Script (`scripts/sync_linguist_patterns.py`)
+1. **Downloads from Linguist**:
+   - `vendor.yml`: Vendored code patterns (6.5KB)
+   - `generated.rb`: Generated file detection logic (29.8KB)
+   - `heuristics.yml`: Language detection rules (35KB, Phase 3)
+
+2. **Parses patterns**:
+   - YAML parsing for `vendor.yml`
+   - Ruby AST parsing for `generated.rb`
+   - Regex extraction and normalization
+
+3. **Generates Rust code**:
+   - Static arrays: `VENDORED_PATTERNS_FROM_LINGUIST`
+   - Static arrays: `GENERATED_PATTERNS_FROM_LINGUIST`
+   - Static arrays: `BINARY_PATTERNS_FROM_LINGUIST`
+
+4. **Output**: `src/file_classifier_generated.rs` (auto-generated)
+
+#### FileClassifier Usage
+```rust
+use singularity_language_registry::FileClassifier;
+
+let classifier = FileClassifier::new();
+
+if classifier.should_analyze(path) {
+    // Analyze source code
+} else {
+    match classifier.classify(path) {
+        FileClass::Vendored => skip("third-party"),
+        FileClass::Generated => skip("auto-generated"),
+        FileClass::Binary => skip("non-text"),
+        FileClass::Source => analyze(),
+    }
+}
+```
+
+### Source Data
+- **`vendor.yml`**: Vendored code patterns (6.5KB)
+  - Dependency manager directories
+  - IDE/editor artifacts
+  - Build output directories
+  - Framework-specific paths
+
+- **`generated.rb`**: Generated file detection (29.8KB)
+  - File path patterns
+  - Extension matching
+  - Content header signatures (Generated by, DO NOT EDIT)
+  - Minification detection
+  - Metadata inspection
+
+- **`heuristics.yml`**: Language detection rules (Phase 3)
+
+## Phase 3: Detection Heuristics (Planned)
+
+### What Will Be Added
+
+Fallback language detection for ambiguous file extensions:
+```
+.pl  → Perl or Prolog?  (check for 'use strict' vs 'use_module')
+.m   → Objective-C or Matlab?  (check for @interface vs function)
+.rs  → Rust or Reason?  (check for 'fn' vs 'let')
+```
+
+### Source Data
+- **`heuristics.yml`**: Detection rules (35KB)
+  - Pattern-based disambiguation
+  - Content signature matching
+  - Named pattern reuse
+
+## Governance Model
+
+### Who Decides What Becomes Supported?
+
+**Linguist** decides what languages exist:
+- Adding languages to Linguist → Auto-detected by Renovate
+- Removing languages from Linguist → Flagged in PR for review
+
+**Singularity** decides what to support:
+- Only languages with `supported_in_singularity: true` are analyzed
+- Requires explicit approval to add support
+
+```
+Global Decision (GitHub Linguist) → Local Decision (Singularity)
+     500+ languages                    24 languages (current)
+```
+
+## Maintenance
+
+### Updating When Renovate Creates a PR
+
+1. **Review the Linguist changes**
+   - New languages added?
+   - Existing languages modified?
+   - File classification patterns updated?
+
+2. **Update Singularity** (if needed)
+   - Add/remove language support
+   - Update file classification
+   - Update detection heuristics
+
+3. **Test**
+   ```bash
+   cargo test
+   cargo clippy -- -D warnings
+   just quality
+   ```
+
+4. **Merge and Release**
+   ```bash
+   cargo release
+   git push
+   ```
+
+## Benefits
+
+✅ **Single Source of Truth**: No duplicate language definitions
+✅ **Forward Compatible**: New languages auto-included (unsupported)
+✅ **Automatic Updates**: Weekly Renovate alerts
+✅ **Community Standard**: Uses GitHub's official definitions
+✅ **Reduced Friction**: Less code to maintain
+✅ **Better File Handling**: Skip vendored/generated automatically
+
+## Future Extensions
+
+### Additional Linguist Sources
+- **MIME Type Mappings**: From `languages.yml`
+- **File Extension Aliases**: Conflicting extensions (e.g., `.h` → C/C++/Objective-C)
+- **Shebang Patterns**: Detect from `#!` line (e.g., `#!/usr/bin/env python`)
+- **EditorConfig Integration**: From Linguist's `.editorconfig`
+
+### Integration Points
+- **singularity-parsing-engine**: Use `FileClassifier` to skip non-source files
+- **singularity-analysis-engine**: Use heuristics for ambiguous languages
+- **singularity-linting-engine**: Use file classification to focus on code
+- **IDE Extensions**: Use language registry for syntax highlighting
+
+## Resources
+
+- **GitHub Linguist**: <https://github.com/github-linguist/linguist>
+- **Linguist Languages**: <https://github.com/github-linguist/linguist/blob/main/lib/linguist/languages.yml>
+- **Linguist Vendor Patterns**: <https://github.com/github-linguist/linguist/blob/main/lib/linguist/vendor.yml>
+- **Linguist Generated Detection**: <https://github.com/github-linguist/linguist/blob/main/lib/linguist/generated.rb>
+- **Linguist Heuristics**: <https://github.com/github-linguist/linguist/blob/main/lib/linguist/heuristics.yml>
+
+## Questions?
+
+See [build.rs](build.rs) for the implementation roadmap and current progress.

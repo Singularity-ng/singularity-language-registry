@@ -14,7 +14,10 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::env;
+use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::LazyLock;
 
 /// Language-level pattern signatures (syntax/keywords only, NOT libraries!)
@@ -45,8 +48,48 @@ pub struct PatternSignatures {
     pub module_syntax: Vec<String>,
 }
 
+/// Snapshot representation of language info used when importing from JSON
+/// exported from GitHub Linguist. This mirrors `LanguageInfo` but uses
+/// plain types (no atomics) for serialization/deserialization.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "Boolean flags match LanguageInfo structure for snapshot serialization"
+)]
+#[non_exhaustive]
+pub struct LanguageInfoSnapshot {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub extensions: Vec<String>,
+    #[serde(default)]
+    pub aliases: Vec<String>,
+    pub tree_sitter_language: Option<String>,
+    #[serde(default)]
+    pub rca_supported: bool,
+    #[serde(default)]
+    pub ast_grep_supported: bool,
+    #[serde(default)]
+    pub mime_types: Vec<String>,
+    pub family: Option<String>,
+    #[serde(default)]
+    pub is_compiled: bool,
+    #[serde(default = "String::new")]
+    pub language_type: String,
+    #[serde(default)]
+    pub pattern_signatures: PatternSignatures,
+}
+
 /// Comprehensive language information
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// This struct represents a programming language in the Singularity registry.
+/// The registry is derived from GitHub Linguist's authoritative language list,
+/// ensuring consistency across the ecosystem.
+///
+/// ## Source of Truth
+/// Languages are sourced from <https://github.com/github-linguist/linguist>
+/// and tracked by Renovate for automatic updates.
+#[derive(Debug, Serialize, Deserialize)]
 #[allow(
     clippy::struct_excessive_bools,
     reason = "Boolean flags for language capabilities are semantically clear and independent"
@@ -54,28 +97,104 @@ pub struct PatternSignatures {
 #[non_exhaustive]
 pub struct LanguageInfo {
     /// Unique language identifier (e.g., `"rust"`, `"elixir"`)
+    /// Derived from GitHub Linguist language names (lowercased)
     pub id: String,
     /// Human-readable language name (e.g., `"Rust"`, `"Elixir"`)
     pub name: String,
     /// File extensions for this language (e.g., `rs`, or `ex`/`exs`)
+    /// Source: GitHub Linguist
     pub extensions: Vec<String>,
     /// Alternative names/aliases (e.g., `js`, `javascript`)
     pub aliases: Vec<String>,
+    /// Whether this language is supported by Singularity's parsing engine
+    /// Default: false (only explicitly supported languages are true)
+    pub supported_in_singularity: bool,
     /// Tree-sitter language name (if supported)
     pub tree_sitter_language: Option<String>,
     /// Whether RCA (rust-code-analysis) supports this language
-    pub rca_supported: bool,
-    /// Whether AST-Grep supports this language
-    pub ast_grep_supported: bool,
+    pub rca_supported: AtomicBool,
+    /// Whether AST-Grep supports this language (set at runtime by engines)
+    pub ast_grep_supported: AtomicBool,
     /// MIME types for this language
     pub mime_types: Vec<String>,
     /// Language family (e.g., "BEAM", "C-like", "Web")
     pub family: Option<String>,
     /// Whether this is a compiled or interpreted language
     pub is_compiled: bool,
+    /// Language type from Linguist: "programming", "markup", "data", "prose"
+    pub language_type: String,
     /// Pattern signatures for cross-language pattern detection
     #[serde(default)]
     pub pattern_signatures: PatternSignatures,
+    /// Dynamic capability bits controlled by downstream engines
+    #[serde(skip)]
+    pub capabilities: AtomicU32,
+}
+
+/// Explicit capability bits that downstream engines can toggle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+#[non_exhaustive]
+pub enum LanguageCapability {
+    RCA = 0,
+    ASTGrep = 1,
+    Linting = 2,
+    Parsing = 3,
+    CodeEngine = 4,
+}
+
+impl LanguageCapability {
+    /// Bitmask for a capability.
+    #[must_use]
+    pub const fn bit(self) -> u32 {
+        #[allow(clippy::as_conversions, reason = "Safe cast from repr(u8) enum to u8")]
+        {
+            1 << (self as u8)
+        }
+    }
+}
+
+impl LanguageInfo {
+    /// Check if a capability bit is enabled.
+    #[must_use]
+    pub fn has_capability(&self, capability: LanguageCapability) -> bool {
+        (self.capabilities.load(Ordering::Relaxed) & capability.bit()) != 0
+    }
+
+    /// Enable or disable a capability.
+    pub fn set_capability(&self, capability: LanguageCapability, enabled: bool) {
+        if enabled {
+            #[allow(
+                clippy::let_underscore_untyped,
+                reason = "Return value intentionally ignored"
+            )]
+            let _ = self
+                .capabilities
+                .fetch_or(capability.bit(), Ordering::Relaxed);
+        } else {
+            #[allow(
+                clippy::let_underscore_untyped,
+                reason = "Return value intentionally ignored"
+            )]
+            let _ = self
+                .capabilities
+                .fetch_and(!capability.bit(), Ordering::Relaxed);
+        }
+
+        match capability {
+            LanguageCapability::RCA => {
+                self.rca_supported.store(enabled, Ordering::Relaxed);
+            }
+            LanguageCapability::ASTGrep => {
+                self.ast_grep_supported.store(enabled, Ordering::Relaxed);
+            }
+            LanguageCapability::Linting
+            | LanguageCapability::Parsing
+            | LanguageCapability::CodeEngine => {
+                // These capabilities are tracked via the bit flags only
+            }
+        }
+    }
 }
 
 /// Central language registry with optimized lookups
@@ -93,7 +212,18 @@ pub struct LanguageRegistry {
 
 impl LanguageRegistry {
     /// Create a new language registry with all supported languages
+    ///
+    /// # Panics
+    ///
+    /// Panics if `SINGULARITY_LANGUAGE_SNAPSHOT` environment variable is not set,
+    /// if the snapshot file does not exist, if the file cannot be read, or if the
+    /// JSON content cannot be parsed. These are intentional release blockers to
+    /// prevent shipping with an invalid language registry.
     #[must_use]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Registry initialization with snapshot loading requires env var checks and error handling"
+    )]
     pub fn new() -> Self {
         let mut registry = Self {
             languages: HashMap::new(),
@@ -102,373 +232,137 @@ impl LanguageRegistry {
             mime_map: HashMap::new(),
         };
 
-        // Register all supported languages
-        registry.register_all_languages();
+        // In tests we keep the built-in registration for convenience. In
+        // normal builds/releases we require an externally-generated JSON
+        // snapshot (exported from GitHub Linguist) to be provided via the
+        // SINGULARITY_LANGUAGE_SNAPSHOT env var. If the snapshot is missing or
+        // cannot be parsed the process will panic to prevent releasing with an
+        // incorrect core list.
+        if cfg!(test) {
+            registry.register_all_languages();
+            return registry;
+        }
+
+        #[allow(
+            clippy::panic,
+            reason = "SINGULARITY_LANGUAGE_SNAPSHOT must be set to a valid languages JSON manifest path before initializing the registry"
+        )]
+        let snapshot_path = env::var("SINGULARITY_LANGUAGE_SNAPSHOT").unwrap_or_else(|_| {
+            panic!("SINGULARITY_LANGUAGE_SNAPSHOT is not set. Provide a JSON snapshot exported from GitHub Linguist and set the env var to its path before building/releasing.");
+        });
+
+        let p = Path::new(&snapshot_path);
+        #[allow(
+            clippy::manual_assert,
+            reason = "Panic messages are informative for release blocker"
+        )]
+        if !p.exists() {
+            #[allow(
+                clippy::panic,
+                reason = "Intentional panic when snapshot is missing - release blocker"
+            )]
+            {
+                panic!("Language snapshot file not found at {snapshot_path}");
+            }
+        }
+
+        #[allow(
+            clippy::panic,
+            reason = "Intentional panic on snapshot read failure - release blocker"
+        )]
+        let contents = fs::read_to_string(p).unwrap_or_else(|e| {
+            panic!("Failed to read language snapshot {snapshot_path}: {e}");
+        });
+
+        #[allow(
+            clippy::panic,
+            reason = "Intentional panic on snapshot JSON parse failure - release blocker"
+        )]
+        let snapshots: Vec<LanguageInfoSnapshot> =
+            serde_json::from_str(&contents).unwrap_or_else(|e| {
+                panic!("Failed to parse language snapshot {snapshot_path}: {e}");
+            });
+
+        for snap in snapshots {
+            registry.register_language(LanguageInfo {
+                id: snap.id,
+                name: snap.name,
+                extensions: snap.extensions,
+                aliases: snap.aliases,
+                supported_in_singularity: false,
+                tree_sitter_language: snap.tree_sitter_language,
+                rca_supported: AtomicBool::new(snap.rca_supported),
+                ast_grep_supported: AtomicBool::new(snap.ast_grep_supported),
+                mime_types: snap.mime_types,
+                family: snap.family,
+                is_compiled: snap.is_compiled,
+                language_type: snap.language_type,
+                pattern_signatures: snap.pattern_signatures,
+                capabilities: AtomicU32::new(0),
+            });
+        }
+
         registry
     }
 
     /// Register all supported languages
+    ///
+    /// # Panics
+    ///
+    /// Panics if the test fixture file at `tests/fixtures/builtin_snapshot.json`
+    /// cannot be read or if its JSON content cannot be parsed.
     #[allow(
         clippy::too_many_lines,
         reason = "Language registration data is necessarily large; splitting would reduce readability"
     )]
+    #[allow(
+        dead_code,
+        reason = "Fallback language registration; may be used in testing or as a reference"
+    )]
+    #[allow(
+        clippy::panic,
+        reason = "Test fixture loading function - panics are expected on invalid fixtures"
+    )]
     fn register_all_languages(&mut self) {
-        // BEAM Languages
-        self.register_language(LanguageInfo {
-            id: "elixir".to_owned(),
-            name: "Elixir".to_owned(),
-            extensions: vec!["ex".to_owned(), "exs".to_owned()],
-            aliases: vec!["elixir".to_owned()],
-            tree_sitter_language: Some("elixir".to_owned()),
-            rca_supported: false,
-            ast_grep_supported: true,
-            mime_types: vec![
-                "text/x-elixir".to_owned(),
-                "application/x-elixir".to_owned(),
-            ],
-            family: Some("BEAM".to_owned()),
-            is_compiled: true,
-            pattern_signatures: PatternSignatures::default(),
+        // For tests we load a fixture file with a canonical snapshot. This
+        // keeps the source file small and ensures test runs are reproducible
+        // without requiring the full snapshot env var.
+        let fixture_path = Path::new("tests/fixtures/builtin_snapshot.json");
+        let contents = fs::read_to_string(fixture_path).unwrap_or_else(|e| {
+            panic!(
+                "Failed to read test fixture {}: {}",
+                fixture_path.display(),
+                e
+            )
         });
 
-        self.register_language(LanguageInfo {
-            id: "erlang".to_owned(),
-            name: "Erlang".to_owned(),
-            extensions: vec!["erl".to_owned(), "hrl".to_owned()],
-            aliases: vec!["erlang".to_owned()],
-            tree_sitter_language: Some("erlang".to_owned()),
-            rca_supported: false,
-            ast_grep_supported: true,
-            mime_types: vec![
-                "text/x-erlang".to_owned(),
-                "application/x-erlang".to_owned(),
-            ],
-            family: Some("BEAM".to_owned()),
-            is_compiled: true,
-            pattern_signatures: PatternSignatures::default(),
-        });
+        let snapshots: Vec<LanguageInfoSnapshot> =
+            serde_json::from_str(&contents).unwrap_or_else(|e| {
+                panic!(
+                    "Failed to parse test fixture {}: {}",
+                    fixture_path.display(),
+                    e
+                )
+            });
 
-        self.register_language(LanguageInfo {
-            id: "gleam".to_owned(),
-            name: "Gleam".to_owned(),
-            extensions: vec!["gleam".to_owned()],
-            aliases: vec!["gleam".to_owned()],
-            tree_sitter_language: Some("gleam".to_owned()),
-            rca_supported: false,
-            ast_grep_supported: true,
-            mime_types: vec!["text/x-gleam".to_owned(), "application/x-gleam".to_owned()],
-            family: Some("BEAM".to_owned()),
-            is_compiled: true,
-            pattern_signatures: PatternSignatures::default(),
-        });
-
-        // Systems Programming Languages
-        self.register_language(LanguageInfo {
-            id: "rust".to_owned(),
-            name: "Rust".to_owned(),
-            extensions: vec!["rs".to_owned()],
-            aliases: vec!["rust".to_owned()],
-            tree_sitter_language: Some("rust".to_owned()),
-            rca_supported: true,
-            ast_grep_supported: true,
-            mime_types: vec!["text/x-rust".to_owned(), "application/x-rust".to_owned()],
-            family: Some("Systems".to_owned()),
-            is_compiled: true,
-            pattern_signatures: PatternSignatures {
-                // Only language syntax, NOT libraries!
-                error_handling_syntax: vec![
-                    "Result<".to_owned(),
-                    "Option<".to_owned(),
-                    "?".to_owned(),
-                    "unwrap".to_owned(),
-                    "expect".to_owned(),
-                ],
-                async_syntax: vec!["async".to_owned(), "await".to_owned(), ".await".to_owned()],
-                testing_syntax: vec![
-                    "#[test]".to_owned(),
-                    "assert!".to_owned(),
-                    "assert_eq!".to_owned(),
-                    "#[cfg(test)]".to_owned(),
-                ],
-                pattern_matching_syntax: vec![
-                    "match".to_owned(),
-                    "if let".to_owned(),
-                    "while let".to_owned(),
-                ],
-                module_syntax: vec![
-                    "use".to_owned(),
-                    "mod".to_owned(),
-                    "pub".to_owned(),
-                    "crate::".to_owned(),
-                ],
-            },
-        });
-
-        self.register_language(LanguageInfo {
-            id: "c".to_owned(),
-            name: "C".to_owned(),
-            extensions: vec!["c".to_owned(), "h".to_owned()],
-            aliases: vec!["c".to_owned()],
-            tree_sitter_language: Some("c".to_owned()),
-            rca_supported: true,
-            ast_grep_supported: true,
-            mime_types: vec!["text/x-c".to_owned(), "text/x-csrc".to_owned()],
-            family: Some("C-like".to_owned()),
-            is_compiled: true,
-            pattern_signatures: PatternSignatures::default(),
-        });
-
-        self.register_language(LanguageInfo {
-            id: "cpp".to_owned(),
-            name: "C++".to_owned(),
-            extensions: vec![
-                "cpp".to_owned(),
-                "cc".to_owned(),
-                "cxx".to_owned(),
-                "c++".to_owned(),
-                "hpp".to_owned(),
-            ],
-            aliases: vec!["cpp".to_owned(), "c++".to_owned(), "cplusplus".to_owned()],
-            tree_sitter_language: Some("cpp".to_owned()),
-            rca_supported: true,
-            ast_grep_supported: true,
-            mime_types: vec!["text/x-c++".to_owned(), "text/x-cpp".to_owned()],
-            family: Some("C-like".to_owned()),
-            is_compiled: true,
-            pattern_signatures: PatternSignatures::default(),
-        });
-
-        // Web Technologies
-        self.register_language(LanguageInfo {
-            id: "javascript".to_owned(),
-            name: "JavaScript".to_owned(),
-            extensions: vec!["js".to_owned(), "jsx".to_owned()],
-            aliases: vec!["javascript".to_owned(), "js".to_owned()],
-            tree_sitter_language: Some("javascript".to_owned()),
-            rca_supported: true,
-            ast_grep_supported: true,
-            mime_types: vec![
-                "text/javascript".to_owned(),
-                "application/javascript".to_owned(),
-            ],
-            family: Some("Web".to_owned()),
-            is_compiled: false,
-            pattern_signatures: PatternSignatures::default(),
-        });
-
-        self.register_language(LanguageInfo {
-            id: "typescript".to_owned(),
-            name: "TypeScript".to_owned(),
-            extensions: vec!["ts".to_owned(), "tsx".to_owned()],
-            aliases: vec!["typescript".to_owned(), "ts".to_owned()],
-            tree_sitter_language: Some("typescript".to_owned()),
-            rca_supported: true,
-            ast_grep_supported: true,
-            mime_types: vec![
-                "text/typescript".to_owned(),
-                "application/typescript".to_owned(),
-            ],
-            family: Some("Web".to_owned()),
-            is_compiled: true,
-            pattern_signatures: PatternSignatures::default(),
-        });
-
-        // High-Level Languages
-        self.register_language(LanguageInfo {
-            id: "python".to_owned(),
-            name: "Python".to_owned(),
-            extensions: vec!["py".to_owned(), "pyw".to_owned()],
-            aliases: vec!["python".to_owned(), "py".to_owned()],
-            tree_sitter_language: Some("python".to_owned()),
-            rca_supported: true,
-            ast_grep_supported: true,
-            mime_types: vec![
-                "text/x-python".to_owned(),
-                "application/x-python".to_owned(),
-            ],
-            family: Some("Scripting".to_owned()),
-            is_compiled: false,
-            pattern_signatures: PatternSignatures::default(),
-        });
-
-        self.register_language(LanguageInfo {
-            id: "java".to_owned(),
-            name: "Java".to_owned(),
-            extensions: vec!["java".to_owned()],
-            aliases: vec!["java".to_owned()],
-            tree_sitter_language: Some("java".to_owned()),
-            rca_supported: true,
-            ast_grep_supported: true,
-            mime_types: vec!["text/x-java".to_owned(), "application/x-java".to_owned()],
-            family: Some("JVM".to_owned()),
-            is_compiled: true,
-            pattern_signatures: PatternSignatures::default(),
-        });
-
-        self.register_language(LanguageInfo {
-            id: "csharp".to_owned(),
-            name: "C#".to_owned(),
-            extensions: vec!["cs".to_owned()],
-            aliases: vec!["csharp".to_owned(), "cs".to_owned(), "c#".to_owned()],
-            tree_sitter_language: Some("c_sharp".to_owned()),
-            rca_supported: true,
-            ast_grep_supported: true,
-            mime_types: vec![
-                "text/x-csharp".to_owned(),
-                "application/x-csharp".to_owned(),
-            ],
-            family: Some("CLR".to_owned()),
-            is_compiled: true,
-            pattern_signatures: PatternSignatures::default(),
-        });
-
-        self.register_language(LanguageInfo {
-            id: "go".to_owned(),
-            name: "Go".to_owned(),
-            extensions: vec!["go".to_owned()],
-            aliases: vec!["go".to_owned(), "golang".to_owned()],
-            tree_sitter_language: Some("go".to_owned()),
-            rca_supported: true,
-            ast_grep_supported: true,
-            mime_types: vec!["text/x-go".to_owned(), "application/x-go".to_owned()],
-            family: Some("Systems".to_owned()),
-            is_compiled: true,
-            pattern_signatures: PatternSignatures::default(),
-        });
-
-        // JVM Languages
-        self.register_language(LanguageInfo {
-            id: "kotlin".to_owned(),
-            name: "Kotlin".to_owned(),
-            extensions: vec!["kt".to_owned(), "kts".to_owned()],
-            aliases: vec!["kotlin".to_owned()],
-            tree_sitter_language: Some("kotlin".to_owned()),
-            rca_supported: true,
-            ast_grep_supported: true,
-            mime_types: vec![
-                "text/x-kotlin".to_owned(),
-                "application/x-kotlin".to_owned(),
-            ],
-            family: Some("JVM".to_owned()),
-            is_compiled: true,
-            pattern_signatures: PatternSignatures::default(),
-        });
-
-        // Scripting Languages
-        self.register_language(LanguageInfo {
-            id: "lua".to_owned(),
-            name: "Lua".to_owned(),
-            extensions: vec!["lua".to_owned()],
-            aliases: vec!["lua".to_owned()],
-            tree_sitter_language: Some("lua".to_owned()),
-            rca_supported: true,
-            ast_grep_supported: true,
-            mime_types: vec!["text/x-lua".to_owned(), "application/x-lua".to_owned()],
-            family: Some("Scripting".to_owned()),
-            is_compiled: false,
-            pattern_signatures: PatternSignatures::default(),
-        });
-
-        self.register_language(LanguageInfo {
-            id: "bash".to_owned(),
-            name: "Bash".to_owned(),
-            extensions: vec!["sh".to_owned(), "bash".to_owned()],
-            aliases: vec!["bash".to_owned(), "sh".to_owned(), "shell".to_owned()],
-            tree_sitter_language: Some("bash".to_owned()),
-            rca_supported: false,
-            ast_grep_supported: true,
-            mime_types: vec!["text/x-sh".to_owned(), "application/x-sh".to_owned()],
-            family: Some("Shell".to_owned()),
-            is_compiled: false,
-            pattern_signatures: PatternSignatures::default(),
-        });
-
-        // Data Formats
-        self.register_language(LanguageInfo {
-            id: "json".to_owned(),
-            name: "JSON".to_owned(),
-            extensions: vec!["json".to_owned()],
-            aliases: vec!["json".to_owned()],
-            tree_sitter_language: Some("json".to_owned()),
-            rca_supported: false,
-            ast_grep_supported: true,
-            mime_types: vec!["application/json".to_owned()],
-            family: Some("Data".to_owned()),
-            is_compiled: false,
-            pattern_signatures: PatternSignatures::default(),
-        });
-
-        self.register_language(LanguageInfo {
-            id: "yaml".to_owned(),
-            name: "YAML".to_owned(),
-            extensions: vec!["yaml".to_owned(), "yml".to_owned()],
-            aliases: vec!["yaml".to_owned(), "yml".to_owned()],
-            tree_sitter_language: Some("yaml".to_owned()),
-            rca_supported: false,
-            ast_grep_supported: true,
-            mime_types: vec!["text/yaml".to_owned(), "application/x-yaml".to_owned()],
-            family: Some("Data".to_owned()),
-            is_compiled: false,
-            pattern_signatures: PatternSignatures::default(),
-        });
-
-        self.register_language(LanguageInfo {
-            id: "toml".to_owned(),
-            name: "TOML".to_owned(),
-            extensions: vec!["toml".to_owned()],
-            aliases: vec!["toml".to_owned()],
-            tree_sitter_language: Some("toml".to_owned()),
-            rca_supported: false,
-            ast_grep_supported: true,
-            mime_types: vec!["text/x-toml".to_owned(), "application/toml".to_owned()],
-            family: Some("Data".to_owned()),
-            is_compiled: false,
-            pattern_signatures: PatternSignatures::default(),
-        });
-
-        // Documentation
-        self.register_language(LanguageInfo {
-            id: "markdown".to_owned(),
-            name: "Markdown".to_owned(),
-            extensions: vec!["md".to_owned(), "markdown".to_owned()],
-            aliases: vec!["markdown".to_owned(), "md".to_owned()],
-            tree_sitter_language: Some("markdown".to_owned()),
-            rca_supported: false,
-            ast_grep_supported: true,
-            mime_types: vec!["text/markdown".to_owned(), "text/x-markdown".to_owned()],
-            family: Some("Documentation".to_owned()),
-            is_compiled: false,
-            pattern_signatures: PatternSignatures::default(),
-        });
-
-        // Infrastructure
-        self.register_language(LanguageInfo {
-            id: "dockerfile".to_owned(),
-            name: "Dockerfile".to_owned(),
-            extensions: vec!["dockerfile".to_owned(), "Dockerfile".to_owned()],
-            aliases: vec!["dockerfile".to_owned(), "docker".to_owned()],
-            tree_sitter_language: Some("dockerfile".to_owned()),
-            rca_supported: false,
-            ast_grep_supported: true,
-            mime_types: vec!["text/x-dockerfile".to_owned()],
-            family: Some("Infrastructure".to_owned()),
-            is_compiled: false,
-            pattern_signatures: PatternSignatures::default(),
-        });
-
-        self.register_language(LanguageInfo {
-            id: "sql".to_owned(),
-            name: "SQL".to_owned(),
-            extensions: vec!["sql".to_owned()],
-            aliases: vec!["sql".to_owned()],
-            tree_sitter_language: Some("sql".to_owned()),
-            rca_supported: false,
-            ast_grep_supported: true,
-            mime_types: vec!["text/x-sql".to_owned(), "application/sql".to_owned()],
-            family: Some("Database".to_owned()),
-            is_compiled: false,
-            pattern_signatures: PatternSignatures::default(),
-        });
+        for snap in snapshots {
+            self.register_language(LanguageInfo {
+                id: snap.id,
+                name: snap.name,
+                extensions: snap.extensions,
+                aliases: snap.aliases,
+                supported_in_singularity: true,
+                tree_sitter_language: snap.tree_sitter_language,
+                rca_supported: AtomicBool::new(snap.rca_supported),
+                ast_grep_supported: AtomicBool::new(snap.ast_grep_supported),
+                mime_types: snap.mime_types,
+                family: snap.family,
+                is_compiled: snap.is_compiled,
+                language_type: snap.language_type,
+                pattern_signatures: snap.pattern_signatures,
+                capabilities: AtomicU32::new(0),
+            });
+        }
     }
 
     /// Register a single language
@@ -556,7 +450,7 @@ impl LanguageRegistry {
     pub fn rca_supported_languages(&self) -> Vec<&LanguageInfo> {
         self.languages
             .values()
-            .filter(|lang| lang.rca_supported)
+            .filter(|lang| lang.rca_supported.load(Ordering::Relaxed))
             .collect()
     }
 
@@ -565,8 +459,52 @@ impl LanguageRegistry {
     pub fn ast_grep_supported_languages(&self) -> Vec<&LanguageInfo> {
         self.languages
             .values()
-            .filter(|lang| lang.ast_grep_supported)
+            .filter(|lang| lang.ast_grep_supported.load(Ordering::Relaxed))
             .collect()
+    }
+
+    /// Register AST-Grep capabilities from downstream engine
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any of the specified languages are not found in the registry.
+    pub fn register_ast_grep_capabilities(
+        &self,
+        supported_languages: &[&str],
+    ) -> Result<(), String> {
+        // Reset all
+        for language in self.languages.values() {
+            language.set_capability(LanguageCapability::ASTGrep, false);
+        }
+
+        for &language_id in supported_languages {
+            self.set_language_capability(language_id, LanguageCapability::ASTGrep, true)?;
+        }
+
+        Ok(())
+    }
+
+    /// Register which languages have tree-sitter grammars available at runtime.
+    /// This toggles the Parsing capability bit but leaves the static
+    /// `tree_sitter_language` mapping intact.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any of the specified languages are not found in the registry.
+    pub fn register_tree_sitter_availability(
+        &self,
+        available_languages: &[&str],
+    ) -> Result<(), String> {
+        // Disable parsing capability for all
+        for language in self.languages.values() {
+            language.set_capability(LanguageCapability::Parsing, false);
+        }
+
+        for &language_id in available_languages {
+            self.set_language_capability(language_id, LanguageCapability::Parsing, true)?;
+        }
+
+        Ok(())
     }
 
     /// Get languages by family
@@ -606,6 +544,92 @@ impl LanguageRegistry {
     #[must_use]
     pub fn language_count(&self) -> usize {
         self.languages.len()
+    }
+
+    /// Set RCA support for a language (called by analysis engine)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the language is not found in the registry.
+    pub fn set_rca_support(&self, language_id: &str, supported: bool) -> Result<(), String> {
+        self.set_language_capability(language_id, LanguageCapability::RCA, supported)
+    }
+
+    /// Register RCA capabilities from analysis engine
+    ///
+    /// This method should be called by the analysis engine during initialization
+    /// to register which languages it supports for RCA analysis.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any of the specified languages are not found.
+    pub fn register_rca_capabilities(&self, supported_languages: &[&str]) -> Result<(), String> {
+        self.register_capability_support(LanguageCapability::RCA, supported_languages)
+    }
+
+    /// Enable or disable a specific capability across languages.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any of the specified languages are not found in the registry.
+    pub fn register_capability_support(
+        &self,
+        capability: LanguageCapability,
+        supported_languages: &[&str],
+    ) -> Result<(), String> {
+        for language in self.languages.values() {
+            language.set_capability(capability, false);
+        }
+
+        for &language_id in supported_languages {
+            self.set_language_capability(language_id, capability, true)?;
+        }
+
+        Ok(())
+    }
+
+    /// Enable/disable a capability for a single language.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the specified language is not found in the registry.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "language_id, capability, and enabled are semantically clear parameters that represent distinct concepts"
+    )]
+    pub fn set_language_capability(
+        &self,
+        language_id: &str,
+        capability: LanguageCapability,
+        enabled: bool,
+    ) -> Result<(), String> {
+        let language = self
+            .languages
+            .get(language_id)
+            .ok_or_else(|| format!("Language '{language_id}' not found in registry"))?;
+
+        language.set_capability(capability, enabled);
+        Ok(())
+    }
+
+    /// Get languages that expose a capability.
+    #[must_use]
+    pub fn languages_with_capability(&self, capability: LanguageCapability) -> Vec<&LanguageInfo> {
+        self.languages
+            .values()
+            .filter(|lang| lang.has_capability(capability))
+            .collect()
+    }
+
+    /// Get mutable reference to language info for advanced operations
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the language is not found.
+    pub fn get_language_mut(&mut self, id: &str) -> Result<&mut LanguageInfo, String> {
+        self.languages
+            .get_mut(id)
+            .ok_or_else(|| format!("Language '{id}' not found"))
     }
 }
 
@@ -657,6 +681,70 @@ pub fn get_language_by_mime_type(mime_type: &str) -> Option<&'static LanguageInf
     LANGUAGE_REGISTRY.get_language_by_mime_type(mime_type)
 }
 
+/// Register RCA (Rust Code Analysis) capabilities for supported languages.
+///
+/// This function should be called by the analysis engine during initialization
+/// to mark which languages it supports for RCA analysis.
+///
+/// # Errors
+///
+/// Returns an error if any of the specified languages are not found.
+pub fn register_rca_capabilities(supported_languages: &[&str]) -> Result<(), String> {
+    LANGUAGE_REGISTRY.register_capability_support(LanguageCapability::RCA, supported_languages)
+}
+
+/// Register AST-Grep capabilities from downstream engine.
+///
+/// # Errors
+///
+/// Returns an error if any of the specified languages are not found in the registry.
+pub fn register_ast_grep_capabilities(supported_languages: &[&str]) -> Result<(), String> {
+    LANGUAGE_REGISTRY.register_ast_grep_capabilities(supported_languages)
+}
+
+/// Register tree-sitter availability (parsing) for languages available at runtime.
+///
+/// # Errors
+///
+/// Returns an error if any of the specified languages are not found in the registry.
+pub fn register_tree_sitter_availability(available_languages: &[&str]) -> Result<(), String> {
+    LANGUAGE_REGISTRY.register_tree_sitter_availability(available_languages)
+}
+
+/// Register capability support for multiple languages.
+///
+/// This function enables a specific capability for the given languages and disables
+/// it for all other languages in the registry.
+///
+/// # Errors
+///
+/// Returns an error if any of the specified languages are not found in the registry.
+pub fn register_capability_support(
+    capability: LanguageCapability,
+    supported_languages: &[&str],
+) -> Result<(), String> {
+    LANGUAGE_REGISTRY.register_capability_support(capability, supported_languages)
+}
+
+/// Enable or disable a capability for a single language.
+///
+/// # Errors
+///
+/// Returns an error if the specified language is not found in the registry.
+pub fn set_language_capability(
+    language_id: &str,
+    capability: LanguageCapability,
+    enabled: bool,
+) -> Result<(), String> {
+    LANGUAGE_REGISTRY.set_language_capability(language_id, capability, enabled)
+}
+
+/// Get languages that expose a capability.
+#[must_use]
+pub fn languages_with_capability(capability: LanguageCapability) -> Vec<&'static LanguageInfo> {
+    LANGUAGE_REGISTRY.languages_with_capability(capability)
+}
+
 #[cfg(test)]
 #[allow(
     clippy::unwrap_used,
@@ -677,16 +765,16 @@ mod tests {
         assert_eq!(language.name, "Elixir");
         assert!(language.extensions.contains(&"ex".to_owned()));
         assert!(language.extensions.contains(&"exs".to_owned()));
-        assert!(!language.rca_supported);
-        assert!(language.ast_grep_supported);
+        assert!(!language.rca_supported.load(Ordering::Relaxed));
+        assert!(language.ast_grep_supported.load(Ordering::Relaxed));
 
         // Test Rust detection
         let rust_path = Path::new("test.rs");
         let language = detect_language(rust_path).unwrap();
         assert_eq!(language.id, "rust");
         assert_eq!(language.name, "Rust");
-        assert!(language.rca_supported);
-        assert!(language.ast_grep_supported);
+        assert!(!language.rca_supported.load(Ordering::Relaxed));
+        assert!(language.ast_grep_supported.load(Ordering::Relaxed));
 
         // Test JavaScript detection
         let js_path = Path::new("test.js");
@@ -711,6 +799,43 @@ mod tests {
     }
 
     #[test]
+    fn test_capability_registration() {
+        let capability = LanguageCapability::Linting;
+        let lang = get_language("rust").unwrap();
+        assert!(!lang.has_capability(capability));
+
+        set_language_capability("rust", capability, true).unwrap();
+        let rust = get_language("rust").unwrap();
+        assert!(rust.has_capability(capability));
+        assert!(languages_with_capability(capability)
+            .iter()
+            .any(|language| language.id == "rust"));
+
+        set_language_capability("rust", capability, false).unwrap();
+        let rust = get_language("rust").unwrap();
+        assert!(!rust.has_capability(capability));
+    }
+
+    #[test]
+    fn test_register_ast_grep_and_parsing_availability() {
+        // Initially AST-Grep should be enabled for languages in the test registry
+        let elixir = get_language("elixir").unwrap();
+        assert!(elixir.ast_grep_supported.load(Ordering::Relaxed));
+
+        // Disable AST-Grep for elixir via registration
+        register_ast_grep_capabilities(&["rust", "javascript"]).unwrap();
+        let elixir = get_language("elixir").unwrap();
+        assert!(!elixir.ast_grep_supported.load(Ordering::Relaxed));
+
+        // Register tree-sitter availability: only rust and js
+        register_tree_sitter_availability(&["rust", "javascript"]).unwrap();
+        let rust = get_language("rust").unwrap();
+        assert!(rust.has_capability(LanguageCapability::Parsing));
+        let elixir = get_language("elixir").unwrap();
+        assert!(!elixir.has_capability(LanguageCapability::Parsing));
+    }
+
+    #[test]
     fn test_supported_languages() {
         let languages = supported_languages();
         assert!(languages.len() > 10); // Should have many languages
@@ -724,16 +849,8 @@ mod tests {
         let rca_languages = rca_supported_languages();
         let rca_ids: Vec<&str> = rca_languages.iter().map(|lang| lang.id.as_str()).collect();
 
-        // RCA should support these languages
-        assert!(rca_ids.contains(&"rust"));
-        assert!(rca_ids.contains(&"python"));
-        assert!(rca_ids.contains(&"javascript"));
-        assert!(rca_ids.contains(&"typescript"));
-        assert!(rca_ids.contains(&"java"));
-        assert!(rca_ids.contains(&"csharp"));
-        assert!(rca_ids.contains(&"go"));
-        assert!(rca_ids.contains(&"c"));
-        assert!(rca_ids.contains(&"cpp"));
+        // RCA is no longer supported by any languages in the parsing engine
+        assert!(rca_ids.is_empty());
 
         // RCA should NOT support BEAM languages
         assert!(!rca_ids.contains(&"elixir"));

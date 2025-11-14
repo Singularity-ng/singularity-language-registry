@@ -1,73 +1,12 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Pre-push hook for Singularity Language Registry
-# Final checks before pushing to remote
-
-set -e
-
-echo "🚀 Running pre-push checks..."
-
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
-# Get the remote and branch being pushed to
-remote="$1"
-url="$2"
-
-# Check which branch we're pushing to
-while read local_ref local_sha remote_ref remote_sha; do
-    branch=$(echo "$remote_ref" | sed 's/refs\/heads\///')
-
-    echo "📍 Pushing to branch: $branch"
-
-    # Prevent direct push to main
-    if [ "$branch" = "main" ]; then
-        echo -e "${RED}❌ Direct push to main branch is not allowed!${NC}"
-        echo -e "${YELLOW}Please create a pull request from development or a feature branch.${NC}"
-        echo ""
-        echo "Steps:"
-        echo "1. git checkout -b feature/your-feature"
-        echo "2. git push origin feature/your-feature"
-        echo "3. Create a PR on GitHub"
-        exit 1
-    fi
-
-    # Run comprehensive tests before push
-    echo "🧪 Running comprehensive tests..."
-    if ! cargo test --all-features --release; then
-        echo -e "${RED}❌ Tests failed!${NC}"
-        exit 1
-    fi
-
-    # Check for outdated dependencies
-    echo "📦 Checking dependencies..."
-    if command -v cargo-outdated &> /dev/null; then
-        cargo outdated || true
-    fi
-
-    # Security audit
-    echo "🔐 Running security audit..."
-    if command -v cargo-audit &> /dev/null; then
-        if ! cargo audit; then
-            echo -e "${YELLOW}⚠️  Security vulnerabilities found!${NC}"
-            echo "Consider fixing before pushing"
-            read -p "Continue anyway? (y/N) " -n 1 -r
-            echo
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                exit 1
-            fi
-        fi
-    fi
-
-    # Documentation check
-    echo "📚 Checking documentation..."
-    if ! cargo doc --all-features --no-deps; then
-        echo -e "${RED}❌ Documentation build failed!${NC}"
-        exit 1
-    fi
-done
-
-echo -e "${GREEN}✅ All pre-push checks passed!${NC}"
+# Pre-push hook that runs the project's pre-push task. If Nix is available
+# we'll run the command inside the devShell so native libraries are provided.
+if command -v nix >/dev/null 2>&1; then
+  echo "🏗️  Running pre-push checks inside Nix devShell (nix develop)..."
+  nix develop --command just pre-push
+else
+  echo "⚠️  Nix not found; running pre-push via just (may fail if native deps missing)..."
+  just pre-push
+fi

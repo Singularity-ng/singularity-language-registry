@@ -237,6 +237,27 @@ if supports_feature("rust", AnalysisFeature::RCA) {
 }
 ```
 
+#### Capability registration
+
+Downstream engines mark the subset of languages they actually implemented by toggling the `LanguageCapability` bits via `set_language_capability` or `register_capability_support`. The registry ships with all capabilities disabled, so every engine can take ownership of its own flag without racing.
+
+```rust
+use singularity_language_registry::{
+    languages_with_capability, register_capability_support, set_language_capability,
+    LanguageCapability,
+};
+
+set_language_capability("rust", LanguageCapability::Linting, true)?;
+
+register_capability_support(
+    LanguageCapability::Parsing,
+    &["rust", "python", "javascript", "go"],
+)?;
+
+let linting = languages_with_capability(LanguageCapability::Linting);
+println!("Linting-ready: {} languages", linting.len());
+```
+
 ---
 
 ## Data Structures
@@ -255,6 +276,7 @@ pub struct LanguageInfo {
     pub ast_grep_supported: bool,      // true
     pub compilation_type: CompilationType, // Compiled
     pub pattern_signatures: Option<PatternSignatures>, // Some(...)
+    pub capabilities: AtomicU32,       // runtime bits (RCA/AST-Grep/linting/parsing/code engine)
 }
 ```
 

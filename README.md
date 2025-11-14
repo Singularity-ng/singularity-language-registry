@@ -170,6 +170,32 @@ if supports_feature("rust", AnalysisFeature::RCA) {
 - `file_patterns(language)` - Get common file patterns for a language
 - `supports_feature(language, feature)` - Check if language supports a feature
 
+### Capability Registration
+
+Every language entry starts with a clean slate for runtime capabilities (RCA, linting, parsing, etc.). Downstream engines flip bits as they ship support via `LanguageCapability` and the helper APIs.
+
+```rust
+use singularity_language_registry::{
+    LanguageCapability, languages_with_capability, register_capability_support,
+    set_language_capability,
+};
+
+// Enable linting support for Rust at runtime.
+set_language_capability("rust", LanguageCapability::Linting, true)?;
+
+// Enumerate the languages that now advertise linting.
+let linting_langs = languages_with_capability(LanguageCapability::Linting);
+println!("Linting-ready languages: {}", linting_langs.len());
+
+// Bulk-enable parsing for a suite of languages.
+register_capability_support(
+    LanguageCapability::Parsing,
+    &["rust", "go", "python", "javascript"],
+)?;
+```
+
+`register_rca_capabilities` now builds on the same mechanism (`LanguageCapability::RCA`), so all capability registration flows re-use a single atomic bitfield per language.
+
 ## Supported Languages
 
 - **BEAM**: Elixir, Erlang, Gleam

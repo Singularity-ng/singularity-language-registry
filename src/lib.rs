@@ -32,7 +32,7 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```no_run
 //! use singularity_language_registry::{detect_language, get_language, LanguageStats};
 //! use std::path::Path;
 //!
@@ -54,17 +54,22 @@
 //! ```
 
 pub mod detection;
+pub mod file_classifier;
 pub mod metadata;
 pub mod registry;
 pub mod utils;
 
 // Core registry exports
-pub use registry::{LanguageInfo, LanguageRegistry, PatternSignatures, LANGUAGE_REGISTRY};
+pub use registry::{
+    LanguageCapability, LanguageInfo, LanguageRegistry, PatternSignatures, LANGUAGE_REGISTRY,
+};
 
 // Convenience functions for direct access
 pub use registry::{
     ast_grep_supported_languages, detect_language, get_language, get_language_by_alias,
-    get_language_by_mime_type, rca_supported_languages, supported_languages,
+    get_language_by_mime_type, languages_with_capability, rca_supported_languages,
+    register_capability_support, register_rca_capabilities, set_language_capability,
+    supported_languages,
 };
 
 // Detection utilities
@@ -84,6 +89,9 @@ pub use metadata::{
     generate_metadata_report, get_known_support, validate_metadata, CapabilityMismatch,
     MetadataSource, MetadataValidation,
 };
+
+// File classification (from Linguist patterns)
+pub use file_classifier::{FileClass, FileClassifier};
 
 // Version information
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -1,16 +1,15 @@
 [package]
 name = "singularity-language-registry"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license-file = "LICENSE"
 authors = ["Singularity Team"]
 description = "Centralized language registry for all Singularity analysis engines"
 repository = "https://github.com/singularity/singularity"
-readme = "README.md"
 keywords = ["language", "registry", "detection", "parsing", "analysis"]
 categories = ["development-tools"]
-documentation = "https://singularity-ng.github.io/singularity-language-registry/"
 homepage = "https://github.com/singularity/singularity"
+readme = "README.md"
 
 # Exclude development/CI files from crates.io package
 exclude = [
@@ -72,6 +71,14 @@ exclude = [
     "WORKFLOW_GUIDE.md",
     "CHANGELOG.md",
 
+    # Generated documentation outputs (do not include generated rustdoc or site builds in crates)
+    "target/doc",
+    "target/doc/",
+    "docs/",
+    "docs/**",
+    "book/",
+    "book/**",
+
     # AI documentation (repo version for developers, .release version for users)
     "AGENTS.md",
     "AGENTS.md.release",
@@ -89,10 +96,8 @@ exclude = [
 
 # Documentation metadata for docs.rs and rustdoc
 [package.metadata.docs.rs]
-all-features = true
-rustdoc-args = ["--cfg", "docsrs"]
-cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
-
+# Documentation publishing is intentionally disabled for this repository per project policy.
+all-features = false
 [lib]
 name = "singularity_language_registry"
 path = "src/lib.rs"
@@ -102,6 +107,7 @@ crate-type = ["rlib"]
 # Serialization (for language definitions)
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_yaml = "0.9"
 
 # Error handling
 anyhow = "1.0"
@@ -109,9 +115,33 @@ anyhow = "1.0"
 # Standard library utilities
 lazy_static = "1.4"
 
+# HTTP client for fetching from Linguist (used by tools)
+# Use rustls instead of default-tls (OpenSSL) for pure-Rust TLS without system dependencies
+reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false, optional = true }
+tokio = { version = "1", features = ["full"], optional = true }
+
+# Regex for pattern extraction
+regex = { version = "1.10", optional = true }
+
+# Logging for the sync tool
+log = { version = "0.4", optional = true }
+env_logger = { version = "0.11", optional = true }
+
+[[bin]]
+name = "sync-linguist"
+path = "tools/linguist_sync.rs"
+required-features = ["sync-tool"]
+
 [features]
 default = []
 validate-metadata = []
+sync-tool = ["reqwest", "tokio", "regex", "log", "env_logger"]
+
+[workspace]
+members = [
+    "tools/linguist_to_snapshot",
+    "tools/generate_snapshot_job",
+]
 
 [build-dependencies]
 

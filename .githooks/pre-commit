@@ -1,3 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Pre-commit hook: run formatting, clippy and tests inside Nix devShell if available
+if command -v nix >/dev/null 2>&1; then
+  echo "🔧 Running pre-commit checks inside Nix devShell..."
+  nix develop --command just pre-commit
+else
+  echo "⚠️  Nix not found; running pre-commit via just (may fail if native deps missing)..."
+  just pre-commit
+fi
+
+exit 0
 #!/bin/bash
 
 # Pre-commit hook for Singularity Language Registry
